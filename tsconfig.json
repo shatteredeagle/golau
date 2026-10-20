@@ -12,8 +12,7 @@
     "isolatedModules": true,
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
     "types": ["node"],
-    "baseUrl": ".",
-    "paths": { "@shared/*": ["src/shared/*"] }
+    "paths": { "@shared/*": ["./src/shared/*"] }
   },
   "include": ["src/**/*", "electron.vite.config.ts"]
 }

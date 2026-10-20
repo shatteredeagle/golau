@@ -6,8 +6,14 @@ directories:
 files:
   - out/**
   - package.json
+extraResources:
+  - from: build/icon.png
+    to: icon.png
 win:
   target: [zip]
-  signAndEditExecutable: false
+  icon: build/icon.ico
+  # rcedit runs under wine when building from Linux
+  signAndEditExecutable: true
 linux:
   target: [dir]
+  icon: build/icon.png
