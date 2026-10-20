@@ -4,7 +4,7 @@ import { fmtDur } from '../shared/time'
 /**
  * BUSY Bar front display (72x16) via its local HTTP API:
  *   POST   /api/display/draw   {application_name, priority, elements[]}
- *   DELETE /api/display/draw?application_name=tasklight
+ *   DELETE /api/display/draw?application_name=golau
  * Auth: X-API-Token = the Bar's access PIN (only needed when one is set).
  * Our priority stays under Home Assistant's (50) so its "Meeting til" text wins.
  */
@@ -15,7 +15,7 @@ export interface BusyBarConfig {
   priority: number
 }
 
-const APP = 'tasklight'
+const APP = 'golau'
 const WHITE = '#FFFFFFFF'
 const AMBER = '#FFB000FF'
 const GREY = '#808080FF'
@@ -95,7 +95,7 @@ export class BusyBar {
 
   async test(): Promise<void> {
     this.last = ''
-    await this.call('POST', this.frame('Tasklight test: hello!', 'IT WORKS', WHITE, TEAL))
+    await this.call('POST', this.frame('Golau test: hello!', 'IT WORKS', WHITE, TEAL))
   }
 
   async clear(): Promise<void> {

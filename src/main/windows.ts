@@ -62,7 +62,7 @@ const common = {
     spellcheck: false,
     devTools: DEV,
     // dev screenshot mode renders without ever putting a window on screen
-    offscreen: !!devEnv('TASKLIGHT_SHOTS')
+    offscreen: !!devEnv('GOLAU_SHOTS')
   }
 }
 
@@ -73,7 +73,7 @@ export function createMain(icon?: Electron.NativeImage): BrowserWindow {
     height: 800,
     minWidth: 860,
     minHeight: 580,
-    title: 'Tasklight',
+    title: 'Golau',
     backgroundColor: '#14161a',
     icon
   })

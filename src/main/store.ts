@@ -45,7 +45,7 @@ const EMPTY_STATE: AppState = {
 }
 
 const dir = (): string => {
-  const d = devEnv('TASKLIGHT_DATA') ?? app.getPath('userData')
+  const d = devEnv('GOLAU_DATA') ?? app.getPath('userData')
   if (!existsSync(d)) mkdirSync(d, { recursive: true })
   return d
 }
@@ -140,7 +140,7 @@ export class Store {
   }
 
   get pat(): string | undefined {
-    return devEnv('TASKLIGHT_PAT') ?? this.secrets.pat
+    return devEnv('GOLAU_PAT') ?? this.secrets.pat
   }
 
   get busybarKey(): string | undefined {

@@ -132,7 +132,7 @@ export function Setup({ settings }: { settings: Settings }): ReactNode {
         <div className="row" style={{ gap: 12 }}>
           <img src={icon} alt="" width={40} height={40} />
           <div>
-            <h2 style={{ margin: 0 }}>Welcome to Tasklight</h2>
+            <h2 style={{ margin: 0 }}>Welcome to Golau</h2>
             <div className="muted small">Connect your Azure DevOps board. Takes a minute.</div>
           </div>
         </div>

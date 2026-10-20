@@ -6,6 +6,7 @@ import { DEV, devEnv } from './env'
 import { BusyBar } from './busybar'
 import { Scheduler } from './scheduler'
 import { loadWarnings, Store } from './store'
+import { migrateFromOldName, OLD_APP_ID, OLD_NAME } from './migrate'
 import { Tracker } from './tracker'
 import { createCapture, createMain, createMini, createNudge, isAppUrl, openLink, placeNudge } from './windows'
 import { runShots } from './shots'
@@ -16,7 +17,29 @@ if (!app.requestSingleInstanceLock()) {
   app.quit()
   process.exit(0)
 }
-app.setAppUserModelId('com.tasklight.app')
+app.setAppUserModelId('com.golau.app')
+
+// Renamed from Tasklight in 0.2.0: bring the user's settings and token across once.
+// Must run before Electron initialises so the copied key file ("Local State") is used.
+const startupNotices: string[] = []
+let migrated = false
+if (!devEnv('GOLAU_DATA')) {
+  try {
+    const copied = migrateFromOldName(join(app.getPath('appData'), OLD_NAME), app.getPath('userData'))
+    if (copied.length) {
+      migrated = true
+      startupNotices.push(`Welcome to Golau (formerly ${OLD_NAME}). Your settings came along; you can uninstall ${OLD_NAME} from Settings → Apps.`)
+    }
+  } catch (e) {
+    console.warn('migration from Tasklight failed', e)
+  }
+}
+
+/** Start-with-Windows entry: points at this exe and starts hidden in the tray. */
+function applyLoginItem(on: boolean): void {
+  if (process.platform === 'win32' || process.platform === 'darwin')
+    app.setLoginItemSettings({ openAtLogin: on, args: ['--hidden'] })
+}
 
 let store: Store
 let tracker: Tracker
@@ -239,13 +262,13 @@ function updateTray(): void {
     : p
       ? `Paused: ${p.focus.title}`
       : 'Nothing in focus'
-  tray.setToolTip(`Tasklight: ${label}`)
+  tray.setToolTip(`Golau: ${label}`)
   const quiet = (tracker.s.quietUntil ?? 0) > Date.now()
   tray.setContextMenu(
     Menu.buildFromTemplate([
       { label: label.length > 60 ? `${label.slice(0, 57)}…` : label, enabled: false },
       { type: 'separator' },
-      { label: 'Open Tasklight', click: () => showMain() },
+      { label: 'Open Golau', click: () => showMain() },
       { label: 'Quick capture…', accelerator: store.settings.captureHotkey, click: showCapture },
       { label: 'Switch task…', click: () => showMain({ view: 'pick' }) },
       f
@@ -346,7 +369,7 @@ const api = {
     const s = store.saveSettings(patch)
     if (before.orgUrl !== s.orgUrl || before.project !== s.project || before.team !== s.team) resetClient()
     if (before.captureHotkey !== s.captureHotkey) registerHotkey()
-    if (before.launchAtLogin !== s.launchAtLogin) app.setLoginItemSettings({ openAtLogin: s.launchAtLogin })
+    if (before.launchAtLogin !== s.launchAtLogin) applyLoginItem(s.launchAtLogin)
     syncMini()
     void busybar.update(tracker.s).catch(() => undefined)
     broadcast('settings', s)
@@ -376,6 +399,7 @@ const api = {
   connStatus: () => lastError,
   appVersion: () => app.getVersion(),
   startupWarnings: () => loadWarnings.splice(0),
+  startupNotices: () => startupNotices.splice(0),
   me: () => guarded(() => client().getMe()),
 
   // work items
@@ -499,7 +523,7 @@ ipcMain.handle('tl', async (e, method: unknown, ...args: unknown[]) => {
 
 app.on('second-instance', () => showMain())
 
-const SHOTS = devEnv('TASKLIGHT_SHOTS')
+const SHOTS = devEnv('GOLAU_SHOTS')
 if (SHOTS) {
   // never put anything on the real screen in screenshot mode
   for (const m of ['show', 'showInactive', 'focus'] as const) BrowserWindow.prototype[m] = function () {}
@@ -539,6 +563,14 @@ app.whenReady().then(() => {
   if (!DEV) Menu.setApplicationMenu(null)
 
   store = new Store()
+  if (store.settings.launchAtLogin && !DEV) applyLoginItem(true)
+  if (migrated && process.platform === 'win32') {
+    try {
+      app.setLoginItemSettings({ openAtLogin: false, name: OLD_APP_ID })
+    } catch {
+      /* old entry may not exist */
+    }
+  }
   tracker = new Tracker(store)
   busybar = new BusyBar(() => ({ ...store.settings.busybar, key: store.busybarKey }))
   tracker.on('change', onStateChange)
@@ -546,7 +578,7 @@ app.whenReady().then(() => {
   scheduler = new Scheduler({
     settings: () => store.settings,
     tracker,
-    idleSeconds: () => (devEnv('TASKLIGHT_FAKE_IDLE') ? Number(devEnv('TASKLIGHT_FAKE_IDLE')) : powerMonitor.getSystemIdleTime()),
+    idleSeconds: () => (devEnv('GOLAU_FAKE_IDLE') ? Number(devEnv('GOLAU_FAKE_IDLE')) : powerMonitor.getSystemIdleTime()),
     myWork: () => workCache,
     isNudgeShowing: () => !!currentNudge,
     show: showNudge,

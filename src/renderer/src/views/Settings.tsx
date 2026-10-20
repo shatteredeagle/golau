@@ -106,7 +106,7 @@ export function SettingsView(): ReactNode {
             </div>
             {check('morningPlan', 'Offer a morning plan', 'first time you\'re active on a work day')}
             {check('eodCheckIn', 'Offer an end-of-day wrap up')}
-            <div className="faint small">Nudges only happen inside these hours. Outside them Tasklight still tracks time but stays quiet.</div>
+            <div className="faint small">Nudges only happen inside these hours. Outside them Golau still tracks time but stays quiet.</div>
           </div>
         </div>
 
@@ -149,7 +149,7 @@ export function SettingsView(): ReactNode {
               <span className="faint small">Electron accelerator format, e.g. CommandOrControl+Alt+Space or CommandOrControl+Shift+J</span>
             </label>
             {check('launchAtLogin', 'Start with Windows', 'opens minimized to the tray')}
-            {check('closeToTray', 'Closing the window keeps Tasklight running in the tray')}
+            {check('closeToTray', 'Closing the window keeps Golau running in the tray')}
             {check('logCompletedWork', 'Wrap up pre-ticks "log hours to Completed Work"', 'for Tasks that track hours')}
             <label className="field">
               Theme
@@ -241,10 +241,10 @@ function About(): ReactNode {
   useEffect(() => {
     void call('appVersion').then(setVersion)
   }, [])
-  const source = 'https://github.com/shatteredeagle/tasklight'
+  const source = 'https://github.com/shatteredeagle/golau'
   return (
     <div className="faint small" style={{ padding: '0 4px 10px' }}>
-      Tasklight {version} · Copyright © 2026 shatteredeagle · Free software under the{' '}
+      Golau {version} · Copyright © 2026 shatteredeagle · Free software under the{' '}
       <a href="https://www.gnu.org/licenses/gpl-3.0.html">GNU GPL v3 or later</a>, with no warranty. Source code:{' '}
       <a href={source}>{source.replace('https://', '')}</a>
     </div>

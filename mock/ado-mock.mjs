@@ -85,7 +85,7 @@ const json = (res, code, body) => {
   res.end(JSON.stringify(body))
 }
 
-// Evaluate the small WIQL subset Tasklight generates by translating it to JS.
+// Evaluate the small WIQL subset Golau generates by translating it to JS.
 function wiqlFilter(query, project) {
   const where = (query.match(/WHERE([\s\S]*?)(ORDER BY|$)/i)?.[1] ?? 'true').trim()
   const str = (s) => JSON.stringify(s.slice(1, -1).replace(/''/g, "'"))

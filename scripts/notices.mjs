@@ -10,8 +10,8 @@ const BUNDLED = ['react', 'react-dom', 'scheduler', 'dompurify', 'lucide-react']
 
 const root = fileURLToPath(new URL('..', import.meta.url))
 const parts = [
-  'Tasklight bundles the following third-party software.',
-  'Tasklight itself is licensed under GPL-3.0-or-later (see LICENSE).',
+  'Golau bundles the following third-party software.',
+  'Golau itself is licensed under GPL-3.0-or-later (see LICENSE).',
   ''
 ]
 

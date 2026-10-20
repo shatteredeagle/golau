@@ -1,12 +1,13 @@
 {
-  "name": "tasklight",
-  "version": "0.1.3",
+  "name": "golau",
+  "version": "0.2.0",
+  "productName": "Golau",
   "description": "Azure DevOps focus companion: keeps you on task and your cards updated",
   "license": "GPL-3.0-or-later",
   "author": "shatteredeagle",
   "repository": {
     "type": "git",
-    "url": "https://github.com/shatteredeagle/tasklight.git"
+    "url": "https://github.com/shatteredeagle/golau.git"
   },
   "private": true,
   "main": "out/main/index.js",
@@ -16,8 +17,8 @@
     "start": "electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "mock": "node mock/ado-mock.mjs",
-    "test": "tsx --test test/scheduler.test.mts test/security.test.mts",
-    "shots": "npm run build && TASKLIGHT_DATA=.shots/data TASKLIGHT_SHOTS=.shots electron .",
+    "test": "tsx --test test/scheduler.test.mts test/security.test.mts test/migrate.test.mts",
+    "shots": "npm run build && GOLAU_DATA=.shots/data GOLAU_SHOTS=.shots electron .",
     "dist:win": "npm run build && electron-builder --win nsis --x64",
     "dist:linux": "npm run build && electron-builder --linux dir"
   },

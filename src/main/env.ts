@@ -4,7 +4,7 @@ import { app } from 'electron'
 export const DEV = !app.isPackaged
 
 /**
- * Dev/test switches (TASKLIGHT_*, ELECTRON_RENDERER_URL). Ignored in the packaged app so an
+ * Dev/test switches (GOLAU_*, ELECTRON_RENDERER_URL). Ignored in the packaged app so an
  * environment variable can't point it at a remote page, a fake token or another data folder.
  */
 export function devEnv(name: string): string | undefined {

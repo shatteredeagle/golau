@@ -7,7 +7,7 @@ import type { Store } from './store'
 import type { Tracker } from './tracker'
 
 /**
- * Dev-only: TASKLIGHT_SHOTS=<dir> renders every screen offscreen against the mock ADO server
+ * Dev-only: GOLAU_SHOTS=<dir> renders every screen offscreen against the mock ADO server
  * and writes PNGs. Lets us review UI changes without a display.
  */
 export interface ShotDeps {
@@ -62,7 +62,7 @@ export async function runShots(d: ShotDeps, dir: string): Promise<void> {
 
   // 2. connect to the mock and seed a believable day
   d.store.setSecret('pat', 'mock-pat')
-  d.store.saveSettings({ orgUrl: 'http://localhost:7071/mockorg', project: 'Platform', team: 'Platform Team', theme: (process.env.TASKLIGHT_THEME as 'dark' | 'light') ?? 'dark' })
+  d.store.saveSettings({ orgUrl: 'http://localhost:7071/mockorg', project: 'Platform', team: 'Platform Team', theme: (process.env.GOLAU_THEME as 'dark' | 'light') ?? 'dark' })
   await d.refresh()
   const now = Date.now()
   const s = d.tracker.s

@@ -1,4 +1,6 @@
-# Tasklight
+# Golau
+
+*Golau* (Welsh, "GOL-eye") means **light**. Formerly called Tasklight; upgrading from it keeps your settings.
 
 A desktop companion for Azure DevOps boards, built for an ADHD brain: it keeps one card "in focus", times it, nudges gently, and makes keeping cards updated a 3-minute habit instead of a chore.
 
@@ -6,11 +8,11 @@ Runs locally (Electron). Windows is the main target; Linux works too. Your PAT i
 
 ## Install (Windows)
 
-1. Download the latest `Tasklight-Setup-<version>.exe` from [Releases](../../releases) and run it. SmartScreen may warn because it's unsigned: **More info → Run anyway**.
-2. It installs just for you, with **no admin prompt**, into `%LOCALAPPDATA%\Programs\Tasklight`, adds a Start menu shortcut and starts the app.
+1. Download the latest `Golau-Setup-<version>.exe` from [Releases](../../releases) and run it. SmartScreen may warn because it's unsigned: **More info → Run anyway**.
+2. It installs just for you, with **no admin prompt**, into `%LOCALAPPDATA%\Programs\Golau`, adds a Start menu shortcut and starts the app.
 3. Paste your org URL + a PAT with **Work Items: Read & write** (+ **Project and Team: Read** to pick a team).
 
-Everything stays in your user profile: the app in `%LOCALAPPDATA%\Programs\Tasklight`, your settings and encrypted token in `%APPDATA%\Tasklight`, the uninstall entry and the optional *Start with Windows* entry under `HKEY_CURRENT_USER`. To upgrade, run a newer setup; to remove, use Settings → Apps (your settings folder is kept; delete it by hand for a clean slate).
+Everything stays in your user profile: the app in `%LOCALAPPDATA%\Programs\Golau`, your settings and encrypted token in `%APPDATA%\Golau`, the uninstall entry and the optional *Start with Windows* entry under `HKEY_CURRENT_USER`. To upgrade, run a newer setup; to remove, use Settings → Apps (your settings folder is kept; delete it by hand for a clean slate).
 
 Settings → *Start with Windows* makes it launch to the tray at login.
 
@@ -41,7 +43,7 @@ Built to be safe on a work machine:
 - **Untrusted work item HTML** (descriptions, comments by other people) is sanitized with DOMPurify: scripts, iframes, SVG, forms and inline styles are stripped, links survive only as absolute `http(s)` URLs that open in your browser, and images become `[image]` links so nothing is fetched (no tracking pixels, no `\\host\share` paths that would leak Windows credentials).
 - **The UI has no network access at all**: every request from the web layer except the app's own files is cancelled; Azure DevOps and the BUSY Bar are called from the main process. CSP is `default-src 'none'`.
 - **Electron hardening:** sandboxed renderers, context isolation, no Node in the UI, no webviews, navigation and new windows blocked, all browser permissions denied, IPC accepts calls only from the app's own page and only for known methods, with ids and field names validated.
-- **Packaged exe:** fuses disable run-as-Node, `NODE_OPTIONS` and `--inspect`; only the integrity-checked `app.asar` loads; DevTools and the dev/test switches (`TASKLIGHT_*`, `ELECTRON_RENDERER_URL`) are off.
+- **Packaged exe:** fuses disable run-as-Node, `NODE_OPTIONS` and `--inspect`; only the integrity-checked `app.asar` loads; DevTools and the dev/test switches (`GOLAU_*`, `ELECTRON_RENDERER_URL`) are off.
 - **Data:** `state.json`/`settings.json` are written atomically (fsync + rename) with a `.bak`; after a crash or forced reboot the running timer is cut off at the last minute the app was alive instead of counting the downtime.
 - Not code-signed: SmartScreen warns, and a locked-down laptop (AppLocker/WDAC) may refuse to run unsigned apps.
 
@@ -53,10 +55,10 @@ npm run mock     # fake ADO at http://localhost:7071/mockorg (project Platform),
 npm run dev      # app with hot reload
 npm test         # nudge-rule + security tests
 npm run shots    # renders every screen offscreen to .shots/*.png (needs the mock running)
-npm run dist:win # dist/Tasklight-<version>-win.zip (builds from Linux; rcedit runs under wine)
+npm run dist:win # dist/Golau-<version>-win.zip (builds from Linux; rcedit runs under wine)
 ```
 
-Data lives in `%APPDATA%\Tasklight` (`settings.json`, `state.json`, `secrets.bin`). `TASKLIGHT_DATA` overrides it when running from source (ignored in the packaged app).
+Data lives in `%APPDATA%\Golau` (`settings.json`, `state.json`, `secrets.bin`). `GOLAU_DATA` overrides it when running from source (ignored in the packaged app).
 
 ### CI and releases
 
@@ -84,7 +86,7 @@ Actions are pinned to commit SHAs; the job that can write to the repo runs no pr
 Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org).
 *Status: applying to the SignPath Foundation program; releases are unsigned until it is approved.*
 
-- **What gets signed:** only `Tasklight.exe` and `Tasklight-Setup-<version>.exe`, built by GitHub Actions on GitHub-hosted runners from a version tag in this repository ([release workflow](.github/workflows/release.yml)). Nothing built elsewhere is signed, and third-party files (Electron's DLLs) are shipped as their maintainers published them.
+- **What gets signed:** only `Golau.exe` and `Golau-Setup-<version>.exe`, built by GitHub Actions on GitHub-hosted runners from a version tag in this repository ([release workflow](.github/workflows/release.yml)). Nothing built elsewhere is signed, and third-party files (Electron's DLLs) are shipped as their maintainers published them.
 - **Team roles:** Committers and reviewers: [@shatteredeagle](https://github.com/shatteredeagle). Approvers: [@shatteredeagle](https://github.com/shatteredeagle) (repository owner). Code is written with AI assistance (Claude); every change is reviewed and pushed by the owner, and outside contributions arrive as pull requests reviewed before merging.
 - **Approval:** every signing request is approved by hand in SignPath before it is signed. All team members use multi-factor authentication on GitHub and SignPath.
 
@@ -92,12 +94,12 @@ Free code signing provided by [SignPath.io](https://about.signpath.io), certific
 
 This program will not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it.
 
-In practice: Tasklight talks only to the Azure DevOps organization you configure (to read and update your work items) and, if you turn it on, to the BUSY Bar address you enter on your local network. Links open in your own browser when you click them. There is no telemetry, analytics, crash reporting or auto-update, and the app's interface itself has no network access (see [Security](#security)). Your settings and encrypted token stay on your machine.
+In practice: Golau talks only to the Azure DevOps organization you configure (to read and update your work items) and, if you turn it on, to the BUSY Bar address you enter on your local network. Links open in your own browser when you click them. There is no telemetry, analytics, crash reporting or auto-update, and the app's interface itself has no network access (see [Security](#security)). Your settings and encrypted token stay on your machine.
 
 ## License
 
 Copyright © 2026 shatteredeagle
 
-Tasklight is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. It is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See [LICENSE](LICENSE) for the full text.
+Golau is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. It is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See [LICENSE](LICENSE) for the full text.
 
 Bundled third-party libraries keep their own licenses (MIT, ISC, Apache-2.0/MPL-2.0); the app ships them in `THIRD_PARTY_NOTICES.txt` next to `LICENSE.txt` in its `resources` folder.

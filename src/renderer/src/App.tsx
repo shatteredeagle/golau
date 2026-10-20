@@ -74,6 +74,7 @@ export function App(): ReactNode {
 
   useEffect(() => {
     void call('startupWarnings').then((w) => w.forEach((m) => toast(m, { error: true })))
+    void call('startupNotices').then((n) => n.forEach((m) => toast(m)))
   }, [toast])
 
   const go = useCallback((r: Route) => {
@@ -130,7 +131,7 @@ export function App(): ReactNode {
       <div className="shell">
         <aside className="sidebar">
           <div className="brand">
-            <img src={icon} alt="" /> Tasklight
+            <img src={icon} alt="" /> Golau
           </div>
           {nav('today', 'Today', Sun)}
           {nav('work', 'My work', LayoutGrid)}
