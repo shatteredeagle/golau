@@ -76,3 +76,11 @@ Actions are pinned to commit SHAs; the job that can write to the repo runs no pr
 - `src/main/scheduler.ts`: when to nudge (tested in `test/scheduler.test.mts`)
 - `src/main/busybar.ts`: BUSY Bar display
 - `src/renderer/src/views/*`: screens; `surfaces.tsx`: nudge card, focus bar, capture box
+
+## License
+
+Copyright © 2026 shatteredeagle
+
+Tasklight is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. It is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See [LICENSE](LICENSE) for the full text.
+
+Bundled third-party libraries keep their own licenses (MIT, ISC, Apache-2.0/MPL-2.0); the app ships them in `THIRD_PARTY_NOTICES.txt` next to `LICENSE.txt` in its `resources` folder.

@@ -1,5 +1,7 @@
 appId: com.tasklight.app
 productName: Tasklight
+# no auto-updater; releases are downloaded manually
+publish: null
 directories:
   output: dist
   buildResources: build
@@ -9,6 +11,10 @@ files:
 extraResources:
   - from: build/icon.png
     to: icon.png
+  - from: LICENSE
+    to: LICENSE.txt
+  - from: out/THIRD_PARTY_NOTICES.txt
+    to: THIRD_PARTY_NOTICES.txt
 win:
   target: [zip]
   icon: build/icon.ico

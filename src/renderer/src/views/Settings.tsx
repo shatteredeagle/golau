@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import type { Settings } from '@shared/types'
 import { call } from '../api'
 import { useApp } from '../components'
@@ -228,7 +228,25 @@ export function SettingsView(): ReactNode {
             </div>
           </div>
         </div>
+
+        <About />
       </div>
     </>
+  )
+}
+
+/** GPL-3.0 §5(d): interactive programs show the license, the lack of warranty and where the source is. */
+function About(): ReactNode {
+  const [version, setVersion] = useState('')
+  useEffect(() => {
+    void call('appVersion').then(setVersion)
+  }, [])
+  const source = 'https://github.com/shatteredeagle/tasklight'
+  return (
+    <div className="faint small" style={{ padding: '0 4px 10px' }}>
+      Tasklight {version} · Copyright © 2026 shatteredeagle · Free software under the{' '}
+      <a href="https://www.gnu.org/licenses/gpl-3.0.html">GNU GPL v3 or later</a>, with no warranty. Source code:{' '}
+      <a href={source}>{source.replace('https://', '')}</a>
+    </div>
   )
 }

@@ -374,6 +374,7 @@ const api = {
   listTeams: async (orgUrl: string, project: string, pat?: string) =>
     new AdoClient({ orgUrl, project, team: '', pat: pat || store.pat || '', allowLocal: DEV }).listTeams(project),
   connStatus: () => lastError,
+  appVersion: () => app.getVersion(),
   startupWarnings: () => loadWarnings.splice(0),
   me: () => guarded(() => client().getMe()),
 

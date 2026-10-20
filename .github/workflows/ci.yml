@@ -37,7 +37,7 @@ jobs:
       - name: Dependency audit (shipped code only)
         run: npm audit --omit=dev --audit-level=moderate
 
-      - run: npx electron-vite build
+      - run: npm run build
 
       # Renders every screen offscreen against the mock ADO server and fails if the
       # hostile-work-item check finds anything not neutralised.
@@ -81,7 +81,7 @@ jobs:
       - run: npm test
 
       - name: Package
-        run: npx electron-vite build && npx electron-builder --win zip --x64 --publish never
+        run: npm run build && npx electron-builder --win zip --x64 --publish never
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
 
