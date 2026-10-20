@@ -55,8 +55,10 @@ export async function runShots(d: ShotDeps, dir: string): Promise<void> {
     await wait(200)
   }
 
-  // 1. first run
+  // 1. first run (GOLAU_SHOTS_SIZE=WxH renders at another window size, e.g. a laptop)
   d.showMain()
+  const size = /^(\d+)x(\d+)$/.exec(process.env.GOLAU_SHOTS_SIZE ?? '')
+  if (size) d.main()?.setContentSize(Number(size[1]), Number(size[2]))
   await wait(1500)
   await snap(d.main(), '01-setup')
 

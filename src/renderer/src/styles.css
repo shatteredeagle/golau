@@ -188,6 +188,9 @@ a {
 }
 .select.inline {
   width: auto;
+  max-width: 100%;
+  min-width: 0;
+  text-overflow: ellipsis;
   padding: 2px 24px 2px 8px;
   font-size: 12.5px;
   border-radius: 999px;
@@ -617,11 +620,27 @@ label.check input {
 
 .board {
   display: grid;
-  grid-template-columns: repeat(4, minmax(220px, 1fr));
+  /* 4 across when there's room; 2x2 or a single column otherwise (see container rules below) */
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 14px;
   align-items: start;
 }
+/* sized by the space the board really has, so it also adapts when the item drawer is open */
+.content {
+  container-type: inline-size;
+}
+@container (max-width: 1000px) {
+  .board {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@container (max-width: 520px) {
+  .board {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
 .column {
+  min-width: 0;
   background: var(--bg2);
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -638,6 +657,8 @@ label.check input {
   color: var(--muted);
 }
 .tile {
+  min-width: 0;
+  overflow: hidden;
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -657,6 +678,13 @@ label.check input {
 .tile .title {
   font-weight: 500;
   line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.tile .row {
+  min-width: 0;
+}
+.tile .row > * {
+  min-width: 0;
 }
 
 /* ---------- drawer ---------- */

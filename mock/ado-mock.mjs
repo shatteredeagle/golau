@@ -13,6 +13,7 @@ const STATES = [
   { name: 'New', color: 'b2b2b2', category: 'Proposed' },
   { name: 'Active', color: '007acc', category: 'InProgress' },
   { name: 'Resolved', color: 'ff9d00', category: 'Resolved' },
+  { name: 'Waiting for Code Review', color: 'b4009e', category: 'Resolved' },
   { name: 'Closed', color: '339933', category: 'Completed' },
   { name: 'Removed', color: 'ffffff', category: 'Removed' }
 ]
@@ -72,6 +73,8 @@ add('Bug', 'Hostile description test', 'New', { assigned: null, changed: 30, des
   '<iframe src="https://evil.example"></iframe><svg onload="alert(1)"></svg><form action="https://evil.example"><input name=a></form>' })
 add('Task', 'Write runbook for cert rotation', 'New', { changed: 8, remaining: 3 })
 add('Bug', 'Dashboard tiles flicker on resize', 'Resolved', { changed: 1 })
+// worst case for card layout: long unbroken words and a long state name
+add('User Story', 'Migrate PartnerPortal.Authentication.OpenIdConnectHandlerConfiguration to the new tenant-wide settings service', 'Waiting for Code Review', { changed: 2, tags: 'auth; tech-debt' })
 add('Task', 'Update pipeline to Node 24', 'Closed', { changed: 0 })
 add('Task', 'Clean up feature flags', 'Closed', { changed: 3 })
 add('User Story', 'Rate limit public API', 'New', { assigned: null, changed: 2 })
