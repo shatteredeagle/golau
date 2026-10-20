@@ -6,7 +6,7 @@ Runs locally (Electron). Windows is the main target; Linux works too. Your PAT i
 
 ## Install (Windows)
 
-1. Unzip `Tasklight-<version>-win.zip` anywhere (e.g. `%LOCALAPPDATA%\Tasklight`). No installer, no admin.
+1. Download the latest `Tasklight-<version>-win.zip` from [Releases](../../releases) and unzip it anywhere (e.g. `%LOCALAPPDATA%\Tasklight`). No installer, no admin.
 2. Run `Tasklight.exe`. SmartScreen may warn because it's unsigned: **More info → Run anyway**.
 3. Paste your org URL + a PAT with **Work Items: Read & write** (+ **Project and Team: Read** to pick a team).
 
@@ -55,6 +55,19 @@ npm run dist:win # dist/Tasklight-<version>-win.zip (builds from Linux; rcedit r
 ```
 
 Data lives in `%APPDATA%\Tasklight` (`settings.json`, `state.json`, `secrets.bin`). `TASKLIGHT_DATA` overrides it when running from source (ignored in the packaged app).
+
+### CI and releases
+
+- **CI** (`.github/workflows/ci.yml`, every push/PR): typecheck, tests, audit of shipped deps, an offscreen run of every screen against the mock (screenshots uploaded as an artifact; fails if the hostile-HTML check finds anything), and a Windows package build with a fuse check (zip uploaded as a 7-day artifact).
+- **Release** (`.github/workflows/release.yml`): bump `version` in `package.json`, commit, then
+
+  ```bash
+  git tag v0.2.0 && git push origin v0.2.0
+  ```
+
+  The tag must match `package.json`. It builds natively on Windows, verifies fuses, and publishes a GitHub Release with the zip and `SHA256SUMS.txt`. A hyphenated tag (`v0.2.0-beta.1`) becomes a prerelease.
+
+Actions are pinned to commit SHAs; the job that can write to the repo runs no project code.
 
 ### Layout
 

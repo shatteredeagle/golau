@@ -1,6 +1,6 @@
 {
   "name": "tasklight",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Azure DevOps focus companion: keeps you on task and your cards updated",
   "main": "out/main/index.js",
   "author": "Jesse",

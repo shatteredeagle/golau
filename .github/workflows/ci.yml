@@ -1,0 +1,101 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Typecheck, test, UI + security smoke
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+      - run: node node_modules/electron/install.js
+
+      - run: npm run typecheck
+      - run: npm test
+
+      - name: Dependency audit (shipped code only)
+        run: npm audit --omit=dev --audit-level=moderate
+
+      - run: npx electron-vite build
+
+      # Renders every screen offscreen against the mock ADO server and fails if the
+      # hostile-work-item check finds anything not neutralised.
+      - name: UI + security smoke
+        run: |
+          # Ubuntu 24.04 blocks the user namespaces Chromium's sandbox needs
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          node mock/ado-mock.mjs &
+          sleep 1
+          TASKLIGHT_DATA=.shots/data TASKLIGHT_SHOTS=.shots xvfb-run -a npx electron . 2>&1 | tee shots.log
+          grep -q 'security-check' shots.log
+          ! grep -q 'SECURITY CHECK FAILED' shots.log
+          test "$(ls .shots/*.png | wc -l)" -ge 17
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: screenshots
+          path: .shots/*.png
+          retention-days: 14
+          if-no-files-found: ignore
+
+  windows:
+    name: Windows build
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+      - run: node node_modules/electron/install.js
+      - run: npm test
+
+      - name: Package
+        run: npx electron-vite build && npx electron-builder --win zip --x64 --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+      - name: Verify Electron fuses
+        shell: bash
+        run: |
+          npx @electron/fuses read --app dist/win-unpacked/Tasklight.exe | tee fuses.txt
+          grep -q 'RunAsNode is Disabled' fuses.txt
+          grep -q 'EnableNodeOptionsEnvironmentVariable is Disabled' fuses.txt
+          grep -q 'EnableNodeCliInspectArguments is Disabled' fuses.txt
+          grep -q 'OnlyLoadAppFromAsar is Enabled' fuses.txt
+
+      - name: Upload test build
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: tasklight-win-${{ github.sha }}
+          path: dist/*.zip
+          retention-days: 7

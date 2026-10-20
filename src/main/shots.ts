@@ -27,6 +27,7 @@ export interface ShotDeps {
 const wait = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
 
 export async function runShots(d: ShotDeps, dir: string): Promise<void> {
+  let failed = false
   mkdirSync(dir, { recursive: true })
   const snap = async (win: BrowserWindow | null, name: string): Promise<void> => {
     if (!win) return console.log(`skip ${name}: no window`)
@@ -84,7 +85,10 @@ export async function runShots(d: ShotDeps, dir: string): Promise<void> {
   const ids = (await d.main()?.webContents.executeJavaScript(
     `window.tl.call('search', { text: 'Hostile', status: 'any', assigned: 'anyone' }).then(r => r.map(i => i.id))`
   )) as number[]
-  if (ids?.length) {
+  if (!ids?.length) {
+    console.error('SECURITY CHECK FAILED: hostile test item not found in mock')
+    failed = true
+  } else {
     await route({ view: 'item', id: ids[0] })
     await wait(1200)
     const report = await d.main()?.webContents.executeJavaScript(`(() => {
@@ -97,6 +101,12 @@ export async function runShots(d: ShotDeps, dir: string): Promise<void> {
       }
     })()`)
     console.log('security-check', JSON.stringify(report))
+    const r = report as { error?: string; imgs?: number; dangerous?: number; hrefs?: (string | null)[] }
+    const badHref = (r.hrefs ?? []).some((h) => h !== null && !/^https:\/\//.test(h))
+    if (r.error || r.imgs || r.dangerous || badHref || !(r.hrefs ?? []).includes('https://example.com/ok')) {
+      console.error('SECURITY CHECK FAILED: hostile work item HTML was not neutralised')
+      failed = true
+    }
     await snap(d.main(), '05b-hostile-item')
     await esc()
   }
@@ -173,5 +183,5 @@ export async function runShots(d: ShotDeps, dir: string): Promise<void> {
   await snap(d.capture(), '17-capture')
 
   d.store.flush()
-  app.exit(0)
+  app.exit(failed ? 1 : 0)
 }
