@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState, type DragEvent, type ReactNode } from 'react'
-import { Loader2, RefreshCw } from 'lucide-react'
+import { ExternalLink, Loader2, RefreshCw } from 'lucide-react'
 import type { StateCategory, WorkItem } from '@shared/types'
 import { ago, fmtDur, todayTotals } from '@shared/time'
-import { FocusButton, StaleBadge, TypeChip, bucket, useApp } from '../components'
+import { FocusButton, OpenInAdo, StaleBadge, TypeChip, bucket, useApp } from '../components'
+import { call } from '../api'
 
 const COLS = [
   { key: 'todo', label: 'To do', category: 'Proposed' },
@@ -108,6 +109,9 @@ export function Board(): ReactNode {
             {current.split('\\').pop()} only
           </label>
         )}
+        <button className="btn sm" title="Open your team's board in Azure DevOps" onClick={() => void call('openBoard')}>
+          <ExternalLink size={14} /> ADO board
+        </button>
         <button
           className="icon-btn"
           title="Refresh"
@@ -254,6 +258,7 @@ function Tile({
         <TypeChip type={item.type} />
         <span className="faint mono small">{item.id}</span>
         <span className="spacer" />
+        <OpenInAdo id={item.id} />
         {pending ? <Loader2 size={14} className="spin" /> : <FocusButton item={item} />}
       </div>
       <div className="title">{item.title}</div>

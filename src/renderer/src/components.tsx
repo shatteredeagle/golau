@@ -1,6 +1,6 @@
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react'
 import DOMPurify from 'dompurify'
-import { Play, X } from 'lucide-react'
+import { ExternalLink, Play, X } from 'lucide-react'
 import type { AppState, Route, Settings, TypeInfo, WorkItem } from '@shared/types'
 import { daysSince, fmtDur } from '@shared/time'
 import { call } from './api'
@@ -96,8 +96,26 @@ export function ItemRow({
       {todayMs ? <span className="pill accent mono">{fmtDur(todayMs)}</span> : null}
       {!compact && <StatePill item={item} />}
       {right}
+      <OpenInAdo id={item.id} />
       {!done && <FocusButton item={item} />}
     </div>
+  )
+}
+
+/** One click to the work item in Azure DevOps (default browser); doesn't open the drawer. */
+export function OpenInAdo({ id, label }: { id: number; label?: boolean }): ReactNode {
+  const open = (e: MouseEvent): void => {
+    e.stopPropagation()
+    void call('openInAdo', id)
+  }
+  return label ? (
+    <button className="btn sm" title={`Open #${id} in Azure DevOps`} onClick={open}>
+      <ExternalLink size={14} /> Open in ADO
+    </button>
+  ) : (
+    <button className="icon-btn open-ado" title={`Open #${id} in Azure DevOps`} onClick={open}>
+      <ExternalLink size={14} />
+    </button>
   )
 }
 

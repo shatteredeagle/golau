@@ -1,9 +1,9 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { Copy, ExternalLink, Loader2, Plus, UserCheck, X } from 'lucide-react'
+import { Copy, Loader2, Plus, UserCheck, X } from 'lucide-react'
 import type { Comment, FieldSpec, WorkItem } from '@shared/types'
 import { ago, fmtDur, itemTotal, todayTotals } from '@shared/time'
 import { call } from '../api'
-import { FocusButton, Html, StaleBadge, TypeChip, useApp } from '../components'
+import { FocusButton, Html, OpenInAdo, StaleBadge, TypeChip, useApp } from '../components'
 import { FieldEditor, timeEstimateSpec } from '../fields'
 
 export function ItemDrawer({ id, onClose }: { id: number; onClose: () => void }): ReactNode {
@@ -80,11 +80,7 @@ export function ItemDrawer({ id, onClose }: { id: number; onClose: () => void })
             <Copy size={14} />
           </button>
           <span className="spacer" />
-          {item && (
-            <button className="icon-btn" title="Open in Azure DevOps" onClick={() => void call('openExternal', item.webUrl)}>
-              <ExternalLink size={16} />
-            </button>
-          )}
+          {item && <OpenInAdo id={item.id} label />}
           <button className="icon-btn" title="Close (Esc)" onClick={onClose}>
             <X size={18} />
           </button>

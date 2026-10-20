@@ -1184,3 +1184,13 @@ label.check input {
 .field-edit .textarea {
   width: 100%;
 }
+/* open-in-ADO icon on rows and tiles: quiet until you point at the card */
+.item-row .open-ado,
+.tile .open-ado {
+  opacity: 0.35;
+}
+.item-row:hover .open-ado,
+.tile:hover .open-ado,
+.open-ado:focus-visible {
+  opacity: 1;
+}

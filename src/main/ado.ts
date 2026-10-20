@@ -195,6 +195,13 @@ export class AdoClient {
     return `${this.projectUrl(project)}/_workitems/edit/${id}`
   }
 
+  /** The team's board in the browser, or the project's boards when no team is picked. */
+  boardUrl(): string {
+    return this.cfg.team
+      ? `${this.projectUrl()}/_boards/board/t/${encodeURIComponent(this.cfg.team)}`
+      : `${this.projectUrl()}/_boards/board`
+  }
+
   async getMe(): Promise<Person> {
     if (this.me) return this.me
     const data = await this.req<{

@@ -51,3 +51,10 @@ test('after a crash/reboot the open session ends at the last save and focus beco
   assert.equal(t.s.paused?.focus.itemId, 7)
   assert.equal(t.s.sessions[0].end, lastSave, 'downtime is not counted')
 })
+
+test('ADO board link stays on the org and encodes the team', () => {
+  const c = new AdoClient({ orgUrl: 'https://dev.azure.com/contoso', project: 'My Project', team: 'Team A/B', pat: 'x' })
+  assert.equal(c.boardUrl(), 'https://dev.azure.com/contoso/My%20Project/_boards/board/t/Team%20A%2FB')
+  const noTeam = new AdoClient({ orgUrl: 'https://dev.azure.com/contoso', project: 'p', team: '', pat: 'x' })
+  assert.equal(noTeam.boardUrl(), 'https://dev.azure.com/contoso/p/_boards/board')
+})

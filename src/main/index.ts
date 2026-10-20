@@ -1,7 +1,7 @@
 import { app, BrowserWindow, clipboard, globalShortcut, ipcMain, Menu, nativeImage, powerMonitor, session, Tray } from 'electron'
 import { join } from 'path'
 import { pathToFileURL } from 'url'
-import { AdoClient, AdoError, checkOrgUrl } from './ado'
+import { AdoClient, AdoError, assertId, checkOrgUrl } from './ado'
 import { DEV, devEnv } from './env'
 import { BusyBar } from './busybar'
 import { Scheduler } from './scheduler'
@@ -501,6 +501,12 @@ const api = {
   },
   types: () => guarded(() => client().getTypes()),
   openExternal: (url: string) => openLink(url),
+  /** open a work item in the browser by id (the focus bar only knows the id) */
+  openInAdo: async (id: number) => {
+    assertId(id)
+    openLink(workCache.find((x) => x.id === id)?.webUrl ?? client().webUrl(id))
+  },
+  openBoard: () => openLink(client().boardUrl()),
   copyText: (text: string) => clipboard.writeText(String(text).slice(0, 10000)),
 
   // focus journal

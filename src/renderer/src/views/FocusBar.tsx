@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import { ArrowLeftRight, Coffee, Pause, Play, Square } from 'lucide-react'
 import { fmtClock } from '@shared/time'
 import { call, useNow } from '../api'
-import { useApp } from '../components'
+import { OpenInAdo, useApp } from '../components'
 
 /** Always-visible strip at the top of the main window: what you're on, how long, quick controls. */
 export function FocusBar({ onSwitch }: { onSwitch: () => void }): ReactNode {
@@ -55,6 +55,7 @@ export function FocusBar({ onSwitch }: { onSwitch: () => void }): ReactNode {
         <span className="small faint">{unplanned ? 'Unplanned (no card yet)' : `Working on #${f!.itemId}`}</span>
         <span className="t ellipsis">{f!.title}</span>
       </div>
+      {f!.itemId && <OpenInAdo id={f!.itemId} />}
       <span className="clock mono">{fmtClock(now - f!.startedAt)}</span>
       <button className="icon-btn" title="Pause" onClick={() => void call('pause')}>
         <Pause size={17} />

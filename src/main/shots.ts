@@ -87,6 +87,15 @@ export async function runShots(d: ShotDeps, dir: string): Promise<void> {
 
   await route({ view: 'work' })
   await snap(d.main(), '03-board')
+  const links = await d.main()?.webContents.executeJavaScript(`({
+    tiles: document.querySelectorAll('.tile .open-ado').length,
+    board: [...document.querySelectorAll('.page-head button')].some((b) => /ADO board/.test(b.textContent ?? ''))
+  })`)
+  console.log('ado-links', JSON.stringify(links))
+  if (!links?.tiles || !links?.board) {
+    console.error('LINKS CHECK FAILED: open-in-ADO buttons missing on the board')
+    failed = true
+  }
 
   // moving the PBI to Committed hits the mock's "Effort required" rule → the fields prompt
   await d.main()?.webContents.executeJavaScript(`(() => {
