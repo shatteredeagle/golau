@@ -33,6 +33,8 @@ jobs:
 
       - run: npm run typecheck
       - run: npm test
+      - name: CHANGELOG.md has notes for this version
+        run: node scripts/changelog.mjs "$(node -p "require('./package.json').version")" > /dev/null
 
       - name: Dependency audit (shipped code only)
         run: npm audit --omit=dev --audit-level=moderate

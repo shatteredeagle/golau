@@ -1,5 +1,6 @@
 # Push a tag like v0.2.0 (matching package.json "version") to build on Windows and publish a
-# GitHub Release with the installer + SHA256SUMS. Versions with a hyphen (v0.2.0-beta.1) are
+# GitHub Release with the installer + SHA256SUMS. The release notes are that version's section
+# of CHANGELOG.md (the release fails early if it's missing). Versions with a hyphen (v0.2.0-beta.1) are
 # prereleases. Signing via SignPath switches on when its repository variables exist (see
 # docs/signpath.md); until then releases are unsigned.
 name: Release
@@ -24,6 +25,8 @@ jobs:
     permissions:
       contents: read
       actions: read
+    outputs:
+      notes: ${{ steps.notes.outputs.text }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -42,6 +45,16 @@ jobs:
             echo "::error::Tag $GITHUB_REF_NAME does not match package.json version $v"
             exit 1
           fi
+
+      - name: Release notes from CHANGELOG.md
+        id: notes
+        shell: bash
+        run: |
+          if ! notes="$(node scripts/changelog.mjs "$GITHUB_REF_NAME")"; then
+            echo "::error::Add a '## ${GITHUB_REF_NAME#v}' section to CHANGELOG.md before tagging"
+            exit 1
+          fi
+          { echo 'text<<GOLAU_NOTES_EOF'; echo "$notes"; echo 'GOLAU_NOTES_EOF'; } >> "$GITHUB_OUTPUT"
 
       - run: npm ci
       - run: node node_modules/electron/install.js
@@ -182,6 +195,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
           SIGNED: ${{ vars.SIGNPATH_ORGANIZATION_ID != '' }}
+          # from the build job (CHANGELOG.md); passed as data, never run
+          CHANGES: ${{ needs.build.outputs.notes }}
         run: |
           pre=""
           [[ "$TAG" == *-* ]] && pre="--prerelease"
@@ -192,6 +207,10 @@ jobs:
             signing="This build isn't code-signed, so SmartScreen asks: More info → Run anyway ([code signing policy]($policy))."
           fi
           {
+            echo "$CHANGES"
+            echo
+            echo "### Install"
+            echo
             echo "**Install (Windows):** download \`Golau-Setup-${TAG#v}.exe\` and run it. It installs just for you (no admin prompt) into \`%LOCALAPPDATA%\\Programs\\Golau\`, adds a Start menu shortcut and starts Golau. To upgrade, run the newer setup; your settings and token are kept. Uninstall from Settings → Apps."
             echo
             echo "$signing"
