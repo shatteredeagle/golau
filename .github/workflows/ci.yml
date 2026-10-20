@@ -42,12 +42,13 @@ jobs:
       # Renders every screen offscreen against the mock ADO server and fails if the
       # hostile-work-item check finds anything not neutralised.
       - name: UI + security smoke
+        timeout-minutes: 8
         run: |
           # Ubuntu 24.04 blocks the user namespaces Chromium's sandbox needs
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
           node mock/ado-mock.mjs &
           sleep 1
-          TASKLIGHT_DATA=.shots/data TASKLIGHT_SHOTS=.shots xvfb-run -a npx electron . 2>&1 | tee shots.log
+          TASKLIGHT_DATA=.shots/data TASKLIGHT_SHOTS=.shots timeout 300 xvfb-run -a npx electron . --disable-gpu 2>&1 | tee shots.log
           grep -q 'security-check' shots.log
           ! grep -q 'SECURITY CHECK FAILED' shots.log
           test "$(ls .shots/*.png | wc -l)" -ge 17

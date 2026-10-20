@@ -29,10 +29,20 @@ const wait = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms)
 export async function runShots(d: ShotDeps, dir: string): Promise<void> {
   let failed = false
   mkdirSync(dir, { recursive: true })
+  // never hang CI: give up loudly if a step stalls
+  const watchdog = setTimeout(() => {
+    console.error('SHOTS FAILED: timed out')
+    app.exit(2)
+  }, 180000)
+  watchdog.unref()
   const snap = async (win: BrowserWindow | null, name: string): Promise<void> => {
     if (!win) return console.log(`skip ${name}: no window`)
     await wait(900)
-    const img = await win.webContents.capturePage()
+    console.log(`capturing ${name}`)
+    const img = await Promise.race([
+      win.webContents.capturePage(),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`capturePage timed out on ${name}`)), 15000))
+    ])
     writeFileSync(join(dir, `${name}.png`), img.toPNG())
     console.log(`shot ${name}`)
   }

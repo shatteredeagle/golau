@@ -576,7 +576,10 @@ app.whenReady().then(() => {
         refresh: () => myWork(true)
       },
       SHOTS
-    )
+    ).catch((e) => {
+      console.error('SHOTS FAILED:', e)
+      app.exit(1)
+    })
     return
   }
 
