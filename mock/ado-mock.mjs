@@ -47,7 +47,7 @@ const FIELDS = [
   ['System.Tags', 'Tags', 'plainText'], ['Microsoft.VSTS.Common.Priority', 'Priority', 'integer'],
   ['Microsoft.VSTS.Common.AcceptanceCriteria', 'Acceptance Criteria', 'html'], ['Microsoft.VSTS.Scheduling.Effort', 'Effort', 'double'],
   ['Microsoft.VSTS.Common.ValueArea', 'Value Area', 'string'], ['Microsoft.VSTS.Scheduling.RemainingWork', 'Remaining Work', 'double'],
-  ['Custom.Customer', 'Customer', 'picklistString'], ['System.Id', 'ID', 'integer'], ['System.CreatedBy', 'Created By', 'identity']
+  ['Custom.Customer', 'Customer', 'picklistString'], ['Custom.TimeEstimate', 'Time Estimate', 'double'], ['System.Id', 'ID', 'integer'], ['System.CreatedBy', 'Created By', 'identity']
 ].map(([referenceName, name, type]) => ({ referenceName, name, type, readOnly: referenceName === 'System.Id' || referenceName === 'System.CreatedBy' }))
 
 function typeFields(type) {
@@ -67,6 +67,8 @@ function typeFields(type) {
     )
   }
   if (type === 'Task') list.push(f('Microsoft.VSTS.Scheduling.RemainingWork'))
+  // an org-added field, found by its display name (no fixed reference name)
+  if (['Task', 'Bug', 'User Story', 'Product Backlog Item'].includes(type)) list.push(f('Custom.TimeEstimate', { helpText: 'Hours' }))
   return list
 }
 
@@ -122,6 +124,7 @@ function add(type, title, state, opts = {}) {
     'System.BoardColumn': state
   }
   if (opts.parent) f['System.Parent'] = opts.parent
+  if (opts.estimate != null) f['Custom.TimeEstimate'] = opts.estimate
   if (type === 'Task') {
     f['Microsoft.VSTS.Scheduling.RemainingWork'] = opts.remaining ?? 4
     f['Microsoft.VSTS.Scheduling.CompletedWork'] = opts.completed ?? 0
@@ -134,7 +137,7 @@ function add(type, title, state, opts = {}) {
 const epic = add('Epic', 'Self-service onboarding', 'Active', { assigned: OTHERS[0], changed: 10 })
 const feat = add('Feature', 'SSO for partner portal', 'Active', { assigned: OTHERS[1], parent: epic, changed: 4 })
 const s1 = add('User Story', 'Partner can sign in with Entra ID', 'Active', { parent: feat, changed: 0, tags: 'auth; partner' })
-add('Task', 'Register app in Entra and store client secret', 'Active', { parent: s1, changed: 5, stateChanged: 6, remaining: 2, completed: 3 })
+add('Task', 'Register app in Entra and store client secret', 'Active', { parent: s1, changed: 5, stateChanged: 6, remaining: 2, completed: 3, estimate: 5 })
 add('Task', 'Wire OIDC callback handler', 'New', { parent: s1, changed: 2, remaining: 6 })
 add('Bug', 'Login redirect loops when cookie is stale', 'Active', { changed: 4, stateChanged: 4, priority: 1, comments: [
   { id: 1, text: '<div>Repro in staging with an expired cookie.</div>', createdBy: { displayName: 'Sam Rivera' }, createdDate: iso(4) }

@@ -2,6 +2,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { parseRuleErrors } from '../src/main/ado.ts'
+import { isTimeEstimate } from '../src/shared/fields.ts'
 
 test('rule errors from customProperties (structured form)', () => {
   const errs = parseRuleErrors('TF401320: Rule Error for field Description. Error code: Required, InvalidEmpty.', {
@@ -46,4 +47,12 @@ test('an empty required dropdown counts as required (message only)', () => {
 test('non-rule errors produce no field errors', () => {
   assert.deepEqual(parseRuleErrors('TF401232: Work item 99 does not exist.'), [])
   assert.deepEqual(parseRuleErrors('Bad request', { message: 'x' }), [])
+})
+
+test('Time Estimate field is found by display name', () => {
+  assert.equal(isTimeEstimate('Time Estimate'), true)
+  assert.equal(isTimeEstimate('time estimate (h)'), true)
+  assert.equal(isTimeEstimate('TimeEstimate'), true)
+  assert.equal(isTimeEstimate('Original Estimate'), false)
+  assert.equal(isTimeEstimate('Time Estimated By'), false)
 })

@@ -3,7 +3,7 @@ import { Loader2, X } from 'lucide-react'
 import type { FieldSpec, Route } from '@shared/types'
 import { call } from '../api'
 import { Modal, ModalHead, TypeChip, useApp, useAutoFocus } from '../components'
-import { coerceField, FieldRow, isBlank, requiredExtraFields, type FieldValue } from '../fields'
+import { coerceField, FieldInput, FieldRow, isBlank, requiredExtraFields, timeEstimateSpec, type FieldValue } from '../fields'
 import { PickModal } from './PickModal'
 
 const PREFERRED = ['Task', 'Bug', 'User Story', 'Product Backlog Item', 'Issue', 'Feature', 'Epic']
@@ -56,6 +56,10 @@ export function CreateModal({ route, onClose }: { route: Extract<Route, { view: 
     (s, i, all) => all.findIndex((x) => x.referenceName === s.referenceName) === i
   )
 
+  // optional "Time Estimate" input; when the process requires it, it's already among the extras
+  const estimate = timeEstimateSpec(specs ?? [])
+  const optionalEstimate = estimate && !extras.some((x) => x.referenceName === estimate.referenceName) ? estimate : undefined
+
   const fromUnplanned = route.fromUnplanned ? state.unplanned.find((u) => u.id === route.fromUnplanned) : undefined
   const isTask = /task/i.test(type)
 
@@ -79,6 +83,8 @@ export function CreateModal({ route, onClose }: { route: Extract<Route, { view: 
         const v = extraValues[s.referenceName]
         if (!isBlank(v)) fields[s.referenceName] = coerceField(s, v!)
       }
+      const est = optionalEstimate && extraValues[optionalEstimate.referenceName]
+      if (optionalEstimate && est !== undefined && !isBlank(est)) fields[optionalEstimate.referenceName] = coerceField(optionalEstimate, est)
       const r = await call('createItem', {
         type,
         title: title.trim(),
@@ -194,6 +200,16 @@ export function CreateModal({ route, onClose }: { route: Extract<Route, { view: 
             Tags
             <input className="input" value={tags} onChange={(e) => setTags(e.target.value)} placeholder="comma, separated" />
           </label>
+          {optionalEstimate && (
+            <label className="field" style={{ width: optionalEstimate.allowedValues?.length ? 160 : 130 }}>
+              {optionalEstimate.name}
+              <FieldInput
+                spec={optionalEstimate}
+                value={extraValues[optionalEstimate.referenceName]}
+                onChange={(v) => setExtraValues((x) => ({ ...x, [optionalEstimate.referenceName]: v }))}
+              />
+            </label>
+          )}
           {isTask && (
             <label className="field" style={{ width: 110 }}>
               Estimate (h)

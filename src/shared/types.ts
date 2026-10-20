@@ -24,6 +24,8 @@ export interface WorkItem {
   priority?: number
   remainingWork?: number
   completedWork?: number
+  /** the process's "Time Estimate" field, when it has one (see shared/fields.ts) */
+  timeEstimate?: unknown
   parentId?: number
   boardColumn?: string
   description?: string

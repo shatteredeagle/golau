@@ -1,9 +1,10 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { Copy, ExternalLink, Loader2, Plus, UserCheck, X } from 'lucide-react'
-import type { Comment, WorkItem } from '@shared/types'
+import type { Comment, FieldSpec, WorkItem } from '@shared/types'
 import { ago, fmtDur, itemTotal, todayTotals } from '@shared/time'
 import { call } from '../api'
 import { FocusButton, Html, StaleBadge, TypeChip, useApp } from '../components'
+import { FieldEditor, timeEstimateSpec } from '../fields'
 
 export function ItemDrawer({ id, onClose }: { id: number; onClose: () => void }): ReactNode {
   const { types, state, toast, go, openItem, updateItem } = useApp()
@@ -13,11 +14,15 @@ export function ItemDrawer({ id, onClose }: { id: number; onClose: () => void })
   const [error, setError] = useState('')
   const [update, setUpdate] = useState('')
   const [posting, setPosting] = useState(false)
+  const [estimateSpec, setEstimateSpec] = useState<FieldSpec>()
 
   const load = async (): Promise<void> => {
     try {
       const it = await call('getItem', id)
       setItem(it)
+      void call('typeFields', it.type, it.project)
+        .then((specs) => setEstimateSpec(timeEstimateSpec(specs)))
+        .catch(() => setEstimateSpec(undefined))
       setComments(await call('getComments', id, it.project))
     } catch (e) {
       setError((e as Error).message)
@@ -167,6 +172,18 @@ export function ItemDrawer({ id, onClose }: { id: number; onClose: () => void })
                         {t}
                       </span>
                     ))}
+                  </dd>
+                </>
+              )}
+              {estimateSpec && (
+                <>
+                  <dt>{estimateSpec.name}</dt>
+                  <dd>
+                    <FieldEditor
+                      spec={estimateSpec}
+                      value={item.timeEstimate}
+                      onSave={(v) => void save({ [estimateSpec.referenceName]: v }, `${estimateSpec.name} saved`)}
+                    />
                   </dd>
                 </>
               )}

@@ -151,6 +151,24 @@ export async function runShots(d: ShotDeps, dir: string): Promise<void> {
   await snap(d.main(), '05-item')
   await esc()
 
+  // the org-added "Time Estimate" field (found by name) shows in the drawer with its value
+  const [estId] = (await js(
+    `window.tl.call('search', { text: 'Register app in Entra', status: 'any', assigned: 'anyone' }).then(r => r.map(i => i.id))`
+  )) as number[]
+  await route({ view: 'item', id: estId })
+  await wait(1200)
+  const est = await js(`(() => {
+    const dt = [...document.querySelectorAll('.drawer dl.props dt')].find((x) => x.textContent === 'Time Estimate')
+    return dt ? dt.nextElementSibling?.querySelector('input')?.value ?? 'no input' : 'missing'
+  })()`)
+  console.log('time-estimate-drawer', JSON.stringify(est))
+  if (est !== '5') {
+    console.error('FIELDS CHECK FAILED: Time Estimate not shown in the item drawer')
+    failed = true
+  }
+  await snap(d.main(), '05a-item-estimate')
+  await esc()
+
   // security check: hostile work item HTML must come out inert
   const ids = (await d.main()?.webContents.executeJavaScript(
     `window.tl.call('search', { text: 'Hostile', status: 'any', assigned: 'anyone' }).then(r => r.map(i => i.id))`
@@ -191,6 +209,13 @@ export async function runShots(d: ShotDeps, dir: string): Promise<void> {
   await snap(d.main(), '08-eod')
   await esc()
   await route({ view: 'create', prefill: { title: 'Helped Sam debug the staging deploy' }, fromUnplanned: uId })
+  await wait(800)
+  const estLabel = await js(`[...document.querySelectorAll('.modal label.field')].some((l) => /^Time Estimate/.test(l.textContent ?? ''))`)
+  console.log('time-estimate-create', estLabel)
+  if (!estLabel) {
+    console.error('FIELDS CHECK FAILED: Time Estimate not offered on the create form')
+    failed = true
+  }
   await snap(d.main(), '09-create')
   await esc()
 

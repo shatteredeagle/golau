@@ -10,6 +10,7 @@ import type {
   TypeInfo,
   WorkItem
 } from '../shared/types'
+import { isTimeEstimate } from '../shared/fields'
 
 const API = 'api-version=7.1'
 const COMMENTS_API = 'api-version=7.1-preview.4'
@@ -138,6 +139,7 @@ export class AdoClient {
   private fieldKinds = new Map<string, Map<string, { kind: FieldKind; readOnly: boolean; name: string }>>() // by project
   private typeFieldCache = new Map<string, FieldSpec[]>() // project|type
   private extraFieldsOk = true
+  private timeEstimateRefs = new Map<string, string | undefined>() // by project
   private cfg: AdoConfig
 
   constructor(cfg: AdoConfig) {
@@ -295,7 +297,13 @@ export class AdoClient {
   private async mapItems(raw: { id: number; rev: number; fields: Record<string, unknown> }[]): Promise<WorkItem[]> {
     const projects = [...new Set(raw.map((r) => r.fields['System.TeamProject'] as string))]
     const typesBy = new Map<string, TypeInfo[]>()
-    await Promise.all(projects.map(async (p) => typesBy.set(p, await this.getTypes(p).catch(() => []))))
+    const estimateRef = new Map<string, string | undefined>()
+    await Promise.all(
+      projects.map(async (p) => {
+        typesBy.set(p, await this.getTypes(p).catch(() => []))
+        estimateRef.set(p, await this.timeEstimateRef(p))
+      })
+    )
     return raw.map((r) => {
       const f = r.fields
       const project = f['System.TeamProject'] as string
@@ -322,6 +330,7 @@ export class AdoClient {
         priority: f['Microsoft.VSTS.Common.Priority'] as number | undefined,
         remainingWork: f['Microsoft.VSTS.Scheduling.RemainingWork'] as number | undefined,
         completedWork: f['Microsoft.VSTS.Scheduling.CompletedWork'] as number | undefined,
+        timeEstimate: f[estimateRef.get(project) ?? ''],
         parentId: f['System.Parent'] as number | undefined,
         boardColumn: f['System.BoardColumn'] as string | undefined,
         description: f['System.Description'] as string | undefined,
@@ -485,6 +494,16 @@ export class AdoClient {
     const map = new Map(data.value.map((f) => [f.referenceName, { kind: KIND[f.type] ?? 'other', readOnly: !!f.readOnly, name: f.name }]))
     this.fieldKinds.set(project, map)
     return map
+  }
+
+  /** Reference name of the process's "Time Estimate" field, if it has one. */
+  private async timeEstimateRef(project: string): Promise<string | undefined> {
+    if (this.timeEstimateRefs.has(project)) return this.timeEstimateRefs.get(project)
+    const all = await this.allFields(project).catch(() => undefined)
+    if (!all) return undefined // try again next time
+    const ref = [...all].find(([, f]) => isTimeEstimate(f.name))?.[0]
+    this.timeEstimateRefs.set(project, ref)
+    return ref
   }
 
   /** Fields of a work item type with required flags, defaults and allowed values. */

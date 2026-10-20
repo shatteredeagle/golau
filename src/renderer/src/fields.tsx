@@ -1,5 +1,6 @@
-import type { ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import type { FieldSpec } from '@shared/types'
+import { isTimeEstimate } from '@shared/fields'
 
 /** Fields the create form already has its own inputs or checkboxes for. */
 export const HANDLED_ON_CREATE = new Set([
@@ -26,6 +27,10 @@ export function requiredExtraFields(specs: FieldSpec[]): FieldSpec[] {
   )
 }
 
+/** The process's "Time Estimate" field for this type, if it has one the user can edit. */
+export const timeEstimateSpec = (specs: FieldSpec[]): FieldSpec | undefined =>
+  specs.find((s) => isTimeEstimate(s.name) && !s.readOnly)
+
 export type FieldValue = string | boolean
 
 export const isBlank = (v: FieldValue | undefined): boolean => v === undefined || v === '' || v === false
@@ -37,6 +42,39 @@ export function coerceField(spec: FieldSpec | undefined, v: FieldValue): unknown
   if (spec?.kind === 'double') return Number(v)
   if (spec?.kind === 'dateTime') return new Date(v).toISOString()
   return v
+}
+
+/** What an input should hold for a value that came from Azure DevOps. */
+export function toFieldValue(spec: FieldSpec, v: unknown): FieldValue {
+  if (v === undefined || v === null) return spec.kind === 'boolean' ? false : ''
+  if (typeof v === 'boolean') return v
+  if (spec.kind === 'dateTime') return String(v).slice(0, 10)
+  return String(v)
+}
+
+/** Inline editor for an existing item's field: picklists and checkboxes save on change, the rest on blur. */
+export function FieldEditor({ spec, value, onSave }: { spec: FieldSpec; value: unknown; onSave: (v: unknown) => void }): ReactNode {
+  const initial = toFieldValue(spec, value)
+  const [v, setV] = useState<FieldValue>(initial)
+  useEffect(() => setV(initial), [initial])
+  const immediate = !!spec.allowedValues?.length || spec.kind === 'boolean'
+  const commit = (next: FieldValue): void => {
+    if (next === initial) return
+    // an emptied input clears the field
+    onSave(typeof next === 'boolean' ? next : next === '' ? null : coerceField(spec, next))
+  }
+  return (
+    <span className="field-edit" onBlur={() => !immediate && commit(v)}>
+      <FieldInput
+        spec={spec}
+        value={v}
+        onChange={(next) => {
+          setV(next)
+          if (immediate) commit(next)
+        }}
+      />
+    </span>
+  )
 }
 
 /** One input for any work item field, chosen by its type and allowed values. */

@@ -1174,3 +1174,13 @@ label.check input {
 .state-chooser .btn {
   justify-content: flex-start;
 }
+/* inline field editors in the item drawer, sized like its number inputs */
+.field-edit :is(.input, .select) {
+  padding: 3px 8px;
+}
+.field-edit .input[type='number'] {
+  width: 90px !important;
+}
+.field-edit .textarea {
+  width: 100%;
+}
