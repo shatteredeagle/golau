@@ -3,11 +3,12 @@
 // Run as part of `npm run build`; fails if a bundled package has no license file.
 import { readFileSync, readdirSync, writeFileSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 // Runtime packages that Vite bundles into the renderer (everything else is build tooling).
 const BUNDLED = ['react', 'react-dom', 'scheduler', 'dompurify', 'lucide-react']
 
-const root = new URL('..', import.meta.url).pathname
+const root = fileURLToPath(new URL('..', import.meta.url))
 const parts = [
   'Tasklight bundles the following third-party software.',
   'Tasklight itself is licensed under GPL-3.0-or-later (see LICENSE).',
