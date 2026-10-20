@@ -1097,3 +1097,28 @@ label.check input {
   border-color: var(--red);
   box-shadow: 0 0 0 3px var(--red-soft);
 }
+
+/* ---------- updates ---------- */
+
+.update-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 20px;
+  background: var(--accent-soft);
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+}
+.update-progress {
+  flex: 0 0 160px;
+  height: 6px;
+  border-radius: 6px;
+  background: var(--line);
+  overflow: hidden;
+}
+.update-progress i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.3s;
+}

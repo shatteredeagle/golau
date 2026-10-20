@@ -16,6 +16,7 @@ import { StaleModal } from './views/StaleModal'
 import { Inbox } from './views/Inbox'
 import { SettingsView } from './views/Settings'
 import { Setup } from './views/Setup'
+import { UpdateBanner } from './update'
 import { RequiredFieldsModal, type Fixup } from './views/RequiredFieldsModal'
 import icon from './assets/icon.png'
 
@@ -167,6 +168,7 @@ export function App(): ReactNode {
           <div>
             <FocusBar onSwitch={() => setOverlay({ kind: 'pick' })} />
             {conn && <div className="banner">{conn}</div>}
+            <UpdateBanner />
           </div>
           <div className={`content ${item ? 'with-drawer' : ''}`}>
             {page === 'today' && <Today />}

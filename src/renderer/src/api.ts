@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import type { Api } from '../../main/index'
 import type { AppState, Route, Settings, WorkItem } from '@shared/types'
 
-type Channel = 'state' | 'settings' | 'work' | 'route' | 'nudge' | 'conn' | 'capture-open'
+type Channel = 'state' | 'settings' | 'work' | 'route' | 'nudge' | 'conn' | 'capture-open' | 'update'
 
 declare global {
   interface Window {

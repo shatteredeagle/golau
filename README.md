@@ -12,7 +12,7 @@ Runs locally (Electron). Windows is the main target; Linux works too. Your PAT i
 2. It installs just for you, with **no admin prompt**, into `%LOCALAPPDATA%\Programs\Golau`, adds a Start menu shortcut and starts the app.
 3. Paste your org URL + a PAT with **Work Items: Read & write** (+ **Project and Team: Read** to pick a team).
 
-Everything stays in your user profile: the app in `%LOCALAPPDATA%\Programs\Golau`, your settings and encrypted token in `%APPDATA%\Golau`, the uninstall entry and the optional *Start with Windows* entry under `HKEY_CURRENT_USER`. To upgrade, run a newer setup; to remove, use Settings → Apps (your settings folder is kept; delete it by hand for a clean slate).
+Everything stays in your user profile: the app in `%LOCALAPPDATA%\Programs\Golau`, your settings and encrypted token in `%APPDATA%\Golau`, the uninstall entry and the optional *Start with Windows* entry under `HKEY_CURRENT_USER`. Golau checks for new versions itself (Settings → Updates: tell me / install automatically / off); you can also just run a newer setup. To remove, use Settings → Apps (your settings folder is kept; delete it by hand for a clean slate).
 
 Settings → *Start with Windows* makes it launch to the tray at login.
 
@@ -44,6 +44,7 @@ Built to be safe on a work machine:
 - **The UI has no network access at all**: every request from the web layer except the app's own files is cancelled; Azure DevOps and the BUSY Bar are called from the main process. CSP is `default-src 'none'`.
 - **Electron hardening:** sandboxed renderers, context isolation, no Node in the UI, no webviews, navigation and new windows blocked, all browser permissions denied, IPC accepts calls only from the app's own page and only for known methods, with ids and field names validated.
 - **Packaged exe:** fuses disable run-as-Node, `NODE_OPTIONS` and `--inspect`; only the integrity-checked `app.asar` loads; DevTools and the dev/test switches (`GOLAU_*`, `ELECTRON_RENDERER_URL`) are off.
+- **Updates:** only from this repository's GitHub releases over HTTPS, only newer non-prerelease versions, downloads only from GitHub hosts, size-capped, and the installer must match the release's `SHA256SUMS.txt` before it runs. It runs as you (per-user, no admin) and upgrades in place. Releases aren't code-signed, so this guards against corruption and tampering in transit, not against a compromised GitHub account.
 - **Data:** `state.json`/`settings.json` are written atomically (fsync + rename) with a `.bak`; after a crash or forced reboot the running timer is cut off at the last minute the app was alive instead of counting the downtime.
 - Not code-signed: SmartScreen warns, and a locked-down laptop (AppLocker/WDAC) may refuse to run unsigned apps.
 
@@ -91,7 +92,7 @@ Every release is built by GitHub Actions on GitHub-hosted runners from a version
 
 This program will not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it.
 
-In practice: Golau talks only to the Azure DevOps organization you configure (to read and update your work items) and, if you turn it on, to the BUSY Bar address you enter on your local network. Links open in your own browser when you click them. There is no telemetry, analytics, crash reporting or auto-update, and the app's interface itself has no network access (see [Security](#security)). Your settings and encrypted token stay on your machine.
+In practice: Golau talks only to the Azure DevOps organization you configure (to read and update your work items), to GitHub to check this project's releases for a newer version every few hours (turn it off in Settings → Updates; the request carries nothing about you or your work), and, if you turn it on, to the BUSY Bar address you enter on your local network. Links open in your own browser when you click them. There is no telemetry, analytics or crash reporting, and the app's interface itself has no network access (see [Security](#security)). Your settings and encrypted token stay on your machine.
 
 ## License
 

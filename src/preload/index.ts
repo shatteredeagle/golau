@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 
-const listeners = ['state', 'settings', 'work', 'route', 'nudge', 'conn', 'capture-open'] as const
+const listeners = ['state', 'settings', 'work', 'route', 'nudge', 'conn', 'capture-open', 'update'] as const
 
 contextBridge.exposeInMainWorld('tl', {
   call: (method: string, ...args: unknown[]) => ipcRenderer.invoke('tl', method, ...args),

@@ -10,6 +10,7 @@ import { migrateFromOldName, OLD_APP_ID, OLD_NAME } from './migrate'
 import { Tracker } from './tracker'
 import { createCapture, createMain, createMini, createNudge, isAppUrl, openLink, placeNudge } from './windows'
 import { runShots } from './shots'
+import { Updater } from './updater'
 import { fmtDur } from '../shared/time'
 import type { CreateItemInput, Mutation, Nudge, Route, SearchQuery, Settings, WorkItem } from '../shared/types'
 
@@ -35,6 +36,15 @@ if (!devEnv('GOLAU_DATA')) {
   }
 }
 
+/** Run the downloaded installer (silent, per-user) and quit so it can replace the files; it reopens Golau. */
+function installUpdateNow(): boolean {
+  if (!updater?.install(true)) return false
+  quitting = true
+  store?.flush()
+  setTimeout(() => app.quit(), 300)
+  return true
+}
+
 /** Start-with-Windows entry: points at this exe and starts hidden in the tray. */
 function applyLoginItem(on: boolean): void {
   if (process.platform === 'win32' || process.platform === 'darwin')
@@ -45,6 +55,7 @@ let store: Store
 let tracker: Tracker
 let scheduler: Scheduler
 let busybar: BusyBar
+let updater: Updater
 let ado: AdoClient | null = null
 let mainWin: BrowserWindow | null = null
 let nudgeWin: BrowserWindow | null = null
@@ -294,6 +305,11 @@ function updateTray(): void {
       { label: label.length > 60 ? `${label.slice(0, 57)}…` : label, enabled: false },
       { type: 'separator' },
       { label: 'Open Golau', click: () => showMain() },
+      ...(updater?.status.state === 'ready'
+        ? [{ label: `Restart to update to ${updater.status.latest}`, click: () => installUpdateNow() }]
+        : updater?.status.state === 'available'
+          ? [{ label: `Golau ${updater.status.latest} is available…`, click: () => showMain({ view: 'settings' }) }]
+          : []),
       { label: 'Quick capture…', accelerator: store.settings.captureHotkey, click: showCapture },
       { label: 'Switch task…', click: () => showMain({ view: 'pick' }) },
       f
@@ -425,6 +441,11 @@ const api = {
   appVersion: () => app.getVersion(),
   startupWarnings: () => loadWarnings.splice(0),
   startupNotices: () => startupNotices.splice(0),
+  appVersionInfo: () => ({ version: app.getVersion(), packaged: app.isPackaged, platform: process.platform }),
+  updateStatus: () => updater.status,
+  checkForUpdates: () => updater.check(),
+  downloadUpdate: () => updater.download(),
+  installUpdate: () => installUpdateNow(),
   me: () => guarded(() => client().getMe()),
 
   // work items
@@ -611,6 +632,28 @@ app.whenReady().then(() => {
   busybar = new BusyBar(() => ({ ...store.settings.busybar, key: store.busybarKey }))
   tracker.on('change', onStateChange)
 
+  // Update checks use their own session: the default session blocks all network for the UI.
+  const updateApi = devEnv('GOLAU_UPDATE_API')
+  updater = new Updater({
+    currentVersion: app.getVersion(),
+    fetch: (url, init) => session.fromPartition('golau-updater').fetch(url, init),
+    tempDir: app.getPath('temp'),
+    canInstall: process.platform === 'win32' && app.isPackaged,
+    releasesApi: updateApi
+  })
+  updater.on('status', (st) => {
+    broadcast('update', st)
+    updateTray()
+    if (st.state === 'available' && store.settings.updates === 'auto') void updater.download()
+  })
+  if (!SHOTS && (app.isPackaged || updateApi)) {
+    const scheduled = (): void => {
+      if (store.settings.updates !== 'off') void updater.check()
+    }
+    setTimeout(scheduled, 30000)
+    setInterval(scheduled, 6 * 3600000)
+  }
+
   scheduler = new Scheduler({
     settings: () => store.settings,
     tracker,
@@ -687,6 +730,8 @@ app.on('window-all-closed', () => {
 // Windows restart/logoff doesn't always reach before-quit; save on the way down regardless.
 powerMonitor.on('shutdown', () => store?.flush())
 app.on('before-quit', () => {
+  // "auto" mode: a downloaded update installs while the app is closed (no relaunch)
+  if (updater && store?.settings.updates === 'auto' && updater.status.state === 'ready') updater.install(false)
   quitting = true
   store?.flush()
   void busybar?.clear()

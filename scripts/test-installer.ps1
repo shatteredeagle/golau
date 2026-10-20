@@ -48,6 +48,20 @@ Start-Sleep -Seconds 20
 if ($app.HasExited) { Fail "app exited early with code $($app.ExitCode)" }
 if (-not (Test-Path $dataDir)) { Fail "app did not create its data folder $dataDir" }
 Write-Host "OK app running (pid $($app.Id)), data in $dataDir"
+
+# Upgrade in place exactly the way the built-in updater does it: same per-user installer,
+# silent, while the app is running; it must close the old app, reinstall and reopen it.
+Write-Host 'Upgrading over the running app (/S --updated --force-run)'
+$up = Start-Process -FilePath $Setup -ArgumentList '/S', '--updated', '--force-run' -Wait -PassThru
+if ($up.ExitCode -ne 0) { Fail "upgrade installer exit code $($up.ExitCode)" }
+Start-Sleep -Seconds 15
+if (Get-Process -Id $app.Id -ErrorAction SilentlyContinue) { Fail 'old app process still running after upgrade' }
+$relaunched = Get-Process -Name 'Golau' -ErrorAction SilentlyContinue
+if (-not $relaunched) { Fail 'app was not reopened after the upgrade' }
+if (-not (Test-Path $exe)) { Fail 'Golau.exe missing after upgrade' }
+if (-not (Test-Path $dataDir)) { Fail 'upgrade removed the user data folder' }
+Write-Host "OK upgraded in place and reopened (pid $($relaunched[0].Id)), user data kept"
+
 Get-Process -Name 'Golau' -ErrorAction SilentlyContinue | Stop-Process -Force
 Start-Sleep -Seconds 2
 

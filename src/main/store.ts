@@ -27,6 +27,7 @@ export const DEFAULT_SETTINGS: Settings = {
   showMini: true,
   closeToTray: true,
   launchAtLogin: false,
+  updates: 'notify',
   theme: 'system',
   busybar: { enabled: false, host: '', hasKey: false, priority: 40 }
 }

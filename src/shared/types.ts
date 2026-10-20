@@ -92,6 +92,19 @@ export interface FieldError {
   field?: FieldSpec
 }
 
+export type UpdateMode = 'off' | 'notify' | 'auto'
+
+export interface UpdateStatus {
+  state: 'idle' | 'checking' | 'up-to-date' | 'available' | 'downloading' | 'ready' | 'installing' | 'error' | 'disabled'
+  current: string
+  latest?: string
+  notes?: string
+  pageUrl?: string
+  progress?: number
+  error?: string
+  checkedAt?: number
+}
+
 /** Result of a create/update across IPC (Errors lose their extra properties there). */
 export type Mutation<T> = { ok: true; value: T } | { ok: false; message: string; fieldErrors: FieldError[] }
 
@@ -132,6 +145,8 @@ export interface Settings {
   showMini: boolean
   closeToTray: boolean
   launchAtLogin: boolean
+  /** update checks: notify (default), auto-install on quit, or off */
+  updates: UpdateMode
   miniPos?: { x: number; y: number }
   theme: 'system' | 'dark' | 'light'
   busybar: BusyBarSettings

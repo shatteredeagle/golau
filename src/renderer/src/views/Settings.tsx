@@ -3,6 +3,7 @@ import type { Settings } from '@shared/types'
 import { call } from '../api'
 import { useApp } from '../components'
 import { ConnectionForm } from './Setup'
+import { UpdateSettings } from '../update'
 
 const DAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
 
@@ -228,6 +229,8 @@ export function SettingsView(): ReactNode {
             </div>
           </div>
         </div>
+
+        <UpdateSettings mode={settings.updates} onMode={(m) => set({ updates: m })} />
 
         <About />
       </div>
