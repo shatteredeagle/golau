@@ -83,12 +83,9 @@ Actions are pinned to commit SHAs; the job that can write to the repo runs no pr
 
 ## Code signing policy
 
-Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org).
-*Status: applying to the SignPath Foundation program; releases are unsigned until it is approved.*
+Releases are **not code-signed**, so Windows SmartScreen warns on first run (More info → Run anyway). To check a download is the one CI built, compare `Get-FileHash Golau-Setup-*.exe` with the release's `SHA256SUMS.txt`.
 
-- **What gets signed:** only `Golau.exe` and `Golau-Setup-<version>.exe`, built by GitHub Actions on GitHub-hosted runners from a version tag in this repository ([release workflow](.github/workflows/release.yml)). Nothing built elsewhere is signed, and third-party files (Electron's DLLs) are shipped as their maintainers published them.
-- **Team roles:** Committers and reviewers: [@shatteredeagle](https://github.com/shatteredeagle). Approvers: [@shatteredeagle](https://github.com/shatteredeagle) (repository owner). Code is written with AI assistance (Claude); every change is reviewed and pushed by the owner, and outside contributions arrive as pull requests reviewed before merging.
-- **Approval:** every signing request is approved by hand in SignPath before it is signed. All team members use multi-factor authentication on GitHub and SignPath.
+Every release is built by GitHub Actions on GitHub-hosted runners from a version tag in this repository ([release workflow](.github/workflows/release.yml)). The workflow can sign through SignPath if that's ever set up ([docs/signpath.md](docs/signpath.md)); those steps are skipped today.
 
 ### Privacy policy
 

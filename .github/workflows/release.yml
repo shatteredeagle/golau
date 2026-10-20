@@ -189,7 +189,7 @@ jobs:
           if [ "$SIGNED" = "true" ]; then
             signing="Signed via SignPath Foundation ([code signing policy]($policy))."
           else
-            signing="This build isn't code-signed yet, so SmartScreen asks: More info → Run anyway ([code signing policy]($policy))."
+            signing="This build isn't code-signed, so SmartScreen asks: More info → Run anyway ([code signing policy]($policy))."
           fi
           {
             echo "**Install (Windows):** download \`Golau-Setup-${TAG#v}.exe\` and run it. It installs just for you (no admin prompt) into \`%LOCALAPPDATA%\\Programs\\Golau\`, adds a Start menu shortcut and starts Golau. To upgrade, run the newer setup; your settings and token are kept. Uninstall from Settings → Apps."
