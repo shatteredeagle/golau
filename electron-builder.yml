@@ -1,0 +1,13 @@
+appId: com.tasklight.app
+productName: Tasklight
+directories:
+  output: dist
+  buildResources: build
+files:
+  - out/**
+  - package.json
+win:
+  target: [zip]
+  signAndEditExecutable: false
+linux:
+  target: [dir]

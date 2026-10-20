@@ -1,0 +1,32 @@
+{
+  "name": "tasklight",
+  "version": "0.1.0",
+  "description": "Azure DevOps focus companion: keeps you on task and your cards updated",
+  "main": "out/main/index.js",
+  "author": "Jesse",
+  "private": true,
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "start": "electron-vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "mock": "node mock/ado-mock.mjs",
+    "dist:win": "electron-vite build && electron-builder --win zip --x64",
+    "dist:linux": "electron-vite build && electron-builder --linux dir"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "electron": "^44.9.1",
+    "electron-builder": "^26.15.3",
+    "electron-vite": "^6.0.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.4"
+  },
+  "dependencies": {
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  }
+}
