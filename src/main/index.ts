@@ -507,6 +507,8 @@ const api = {
     openLink(workCache.find((x) => x.id === id)?.webUrl ?? client().webUrl(id))
   },
   openBoard: () => openLink(client().boardUrl()),
+  /** the team's ADO board columns, or undefined (no team / no access): the board view then uses state categories */
+  board: () => guarded(() => client().getBoard()).catch(() => undefined),
   copyText: (text: string) => clipboard.writeText(String(text).slice(0, 10000)),
 
   // focus journal

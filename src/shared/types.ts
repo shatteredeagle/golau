@@ -263,3 +263,19 @@ export type Route =
       fromUnplanned?: string
       fromInbox?: string
     }
+
+/** A column on the team's ADO board, in board order. */
+export interface BoardColumn {
+  name: string
+  columnType: 'incoming' | 'inProgress' | 'outgoing'
+  /** work item type → the state cards of that type have in this column */
+  stateMappings: Record<string, string>
+}
+
+/** The team's backlog-items board (the one ADO opens by default). */
+export interface BoardInfo {
+  name: string
+  /** the board's own column field (WEF_…_Kanban.Column); setting it moves a card between columns that share a state */
+  columnField?: string
+  columns: BoardColumn[]
+}

@@ -1,6 +1,6 @@
 {
   "name": "golau",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "productName": "Golau",
   "description": "Azure DevOps focus companion: keeps you on task and your cards updated",
   "license": "GPL-3.0-or-later",
@@ -17,7 +17,7 @@
     "start": "electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "mock": "node mock/ado-mock.mjs",
-    "test": "tsx --test test/scheduler.test.mts test/security.test.mts test/migrate.test.mts test/fields.test.mts test/updater.test.mts",
+    "test": "tsx --test test/board.test.mts test/scheduler.test.mts test/security.test.mts test/migrate.test.mts test/fields.test.mts test/updater.test.mts",
     "shots": "npm run build && GOLAU_DATA=.shots/data GOLAU_SHOTS=.shots electron .",
     "dist:win": "npm run build && electron-builder --win nsis --x64",
     "dist:linux": "npm run build && electron-builder --linux dir"

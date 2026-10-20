@@ -40,6 +40,19 @@ const TYPES = [
           : STATES
 }))
 
+// The team's backlog-items board: Dev and Test share "Active" for stories (only the column field tells them
+// apart), and PBIs have no Review column (dragging one there is refused).
+const BOARD_FIELD = 'WEF_6CB513B6E70E43499D9FC94E5BBFB784_Kanban.Column'
+const BOARD = [
+  ['New', 'incoming', { 'User Story': 'New', Bug: 'New', 'Product Backlog Item': 'New' }],
+  ['Ready', 'inProgress', { 'User Story': 'New', Bug: 'New', 'Product Backlog Item': 'Approved' }],
+  ['Dev', 'inProgress', { 'User Story': 'Active', Bug: 'Active', 'Product Backlog Item': 'Committed' }],
+  ['Test', 'inProgress', { 'User Story': 'Active', Bug: 'In Test', 'Product Backlog Item': 'Committed' }],
+  ['Review', 'inProgress', { 'User Story': 'Waiting for Code Review', Bug: 'Resolved' }],
+  ['Closed', 'outgoing', { 'User Story': 'Closed', Bug: 'Closed', 'Product Backlog Item': 'Done' }]
+].map(([name, columnType, stateMappings]) => ({ id: name.toLowerCase(), name, columnType, stateMappings, isSplit: false, itemLimit: 0 }))
+const boardColumnFor = (type, state) => BOARD.find((c) => c.stateMappings[type] === state)?.name
+
 // Field definitions (subset) and per-type rules, like a customised process would have.
 const FIELDS = [
   ['System.Title', 'Title', 'string'], ['System.Description', 'Description', 'html'], ['System.State', 'State', 'string'],
@@ -121,7 +134,7 @@ function add(type, title, state, opts = {}) {
     'System.Tags': opts.tags ?? '',
     'Microsoft.VSTS.Common.Priority': opts.priority ?? 2,
     'System.Description': opts.description ?? `<p>${title}. Details go here.</p>`,
-    'System.BoardColumn': state
+    'System.BoardColumn': boardColumnFor(type, state)
   }
   if (opts.parent) f['System.Parent'] = opts.parent
   if (opts.estimate != null) f['Custom.TimeEstimate'] = opts.estimate
@@ -205,6 +218,7 @@ function applyPatch(it, ops) {
       if (op.op === 'remove') delete it.fields[k]
       else if (k === 'System.AssignedTo') it.fields[k] = [ME, ...OTHERS].find((p) => p.uniqueName === op.value || p.displayName === op.value) ?? ME
       else if (k === 'System.History') comments.get(it.id).unshift({ id: Date.now(), text: op.value, createdBy: ME, createdDate: new Date().toISOString() })
+      else if (k === BOARD_FIELD) it.fields['System.BoardColumn'] = op.value
       else {
         if (k === 'System.State' && it.fields[k] !== op.value) it.fields['Microsoft.VSTS.Common.StateChangeDate'] = new Date().toISOString()
         it.fields[k] = op.value
@@ -215,7 +229,11 @@ function applyPatch(it, ops) {
   }
   it.rev++
   it.fields['System.ChangedDate'] = new Date().toISOString()
-  if (it.fields['System.State']) it.fields['System.BoardColumn'] = it.fields['System.State']
+  // like ADO: a state change without a column puts the card in the first column for that state
+  const type = it.fields['System.WorkItemType']
+  const col = BOARD.find((c) => c.name === it.fields['System.BoardColumn'])
+  if (!col || col.stateMappings[type] !== it.fields['System.State']) it.fields['System.BoardColumn'] = boardColumnFor(type, it.fields['System.State'])
+  if (!it.fields['System.BoardColumn']) delete it.fields['System.BoardColumn']
 }
 
 http
@@ -301,6 +319,15 @@ http
         }
         return json(res, 200, it)
       }
+      if (key === 'work/backlogs' && scope[1])
+        return json(res, 200, { value: [
+          { id: 'Microsoft.EpicCategory', name: 'Epics', type: 'portfolio', rank: 3 },
+          { id: 'Microsoft.FeatureCategory', name: 'Features', type: 'portfolio', rank: 2 },
+          { id: 'Microsoft.RequirementCategory', name: 'Stories', type: 'requirement', rank: 1 },
+          { id: 'Microsoft.TaskCategory', name: 'Tasks', type: 'task', rank: 0 }
+        ] })
+      if (api[0] === 'work' && api[1] === 'boards' && api[2] === 'Stories' && scope[1])
+        return json(res, 200, { id: 'stories', name: 'Stories', columns: BOARD, fields: { columnField: { referenceName: BOARD_FIELD }, doneField: { referenceName: BOARD_FIELD.replace('Column', 'Column.Done') } } })
       if (key === 'work/teamsettings/iterations')
         return json(res, 200, { value: [{ name: 'Sprint 42', path: 'Platform\\Sprint 42' }] })
       return json(res, 404, { message: `mock: no route ${req.method} ${url.pathname}` })

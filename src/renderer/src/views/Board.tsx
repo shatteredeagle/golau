@@ -1,29 +1,35 @@
-import { useEffect, useMemo, useState, type DragEvent, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties, type DragEvent, type ReactNode } from 'react'
 import { ExternalLink, Loader2, RefreshCw } from 'lucide-react'
-import type { StateCategory, WorkItem } from '@shared/types'
+import type { BoardInfo, StateCategory, WorkItem } from '@shared/types'
+import { columnOf, columnsFor, moveFields, statesFor as statesIn } from '@shared/board'
 import { ago, fmtDur, todayTotals } from '@shared/time'
-import { FocusButton, OpenInAdo, StaleBadge, TypeChip, bucket, useApp } from '../components'
+import { FocusButton, OpenInAdo, StaleBadge, TypeChip, useApp } from '../components'
 import { call } from '../api'
-
-const COLS = [
-  { key: 'todo', label: 'To do', category: 'Proposed' },
-  { key: 'doing', label: 'Doing', category: 'InProgress' },
-  { key: 'review', label: 'Review / resolved', category: 'Resolved' },
-  { key: 'done', label: 'Done this week', category: 'Completed' }
-] as const
-type ColKey = (typeof COLS)[number]['key']
 
 const MIME = 'application/x-golau-card'
 
 interface Chooser {
   item: WorkItem
+  col: string
   states: string[]
   x: number
   y: number
 }
 
 export function Board(): ReactNode {
-  const { work, refreshWork, state, types, toast, updateItem } = useApp()
+  const { work, refreshWork, state, types, settings, toast, updateItem } = useApp()
+  // the team's ADO board columns; undefined → state-category columns
+  const [board, setBoard] = useState<BoardInfo | undefined>()
+  useEffect(() => {
+    let live = true
+    call('board')
+      .then((b) => live && setBoard(b ?? undefined))
+      .catch(() => live && setBoard(undefined))
+    return () => {
+      live = false
+    }
+  }, [settings.orgUrl, settings.project, settings.team])
+  const cols = useMemo(() => columnsFor(board, types), [board, types])
   const [busy, setBusy] = useState(false)
   const [sprintOnly, setSprintOnly] = useState(false)
   const [typeFilter, setTypeFilter] = useState<string | null>(null)
@@ -31,8 +37,8 @@ export function Board(): ReactNode {
 
   // drag and drop
   const [dragId, setDragId] = useState<number | null>(null)
-  const [over, setOver] = useState<ColKey | null>(null)
-  const [pending, setPending] = useState<Map<number, { category: StateCategory; state: string }>>(new Map())
+  const [over, setOver] = useState<string | null>(null)
+  const [pending, setPending] = useState<Map<number, { category: StateCategory; state: string; boardColumn?: string }>>(new Map())
   const [chooser, setChooser] = useState<Chooser | null>(null)
 
   const sprints = [...new Set((work ?? []).map((i) => i.iterationPath).filter(Boolean))] as string[]
@@ -48,36 +54,40 @@ export function Board(): ReactNode {
     .filter((i) => (!sprintOnly || i.iterationPath === current) && (!typeFilter || i.type === typeFilter))
     .map((i) => {
       const p = pending.get(i.id)
-      return p ? { ...i, category: p.category, state: p.state } : i
+      return p ? { ...i, ...p } : i
     })
-  const cols = bucket(items)
+  const byCol = new Map<string, WorkItem[]>(cols.map((c) => [c.key, []]))
+  for (const i of items) {
+    const k = columnOf(cols, i)
+    if (k) byCol.get(k)!.push(i)
+  }
   const presentTypes = [...new Set((work ?? []).map((i) => i.type))]
   const dragged = dragId != null ? items.find((i) => i.id === dragId) : undefined
 
-  /** States of this card's type that belong to a column (e.g. Scrum has no "Resolved"). */
-  const statesFor = (item: WorkItem, col: ColKey): string[] => {
-    const cat = COLS.find((c) => c.key === col)!.category
-    return types.find((t) => t.name === item.type)?.states.filter((s) => s.category === cat).map((s) => s.name) ?? []
-  }
-  const verdict = (col: ColKey): 'same' | 'ok' | 'no' | null => {
+  /** States of this card's type that put it in a column (e.g. Scrum has no "Resolved"). */
+  const statesFor = (item: WorkItem, col: string): string[] => statesIn(cols, types, item, col)
+  const verdict = (col: string): 'same' | 'ok' | 'no' | null => {
     if (!dragged) return null
-    if (dragged.category === COLS.find((c) => c.key === col)!.category) return 'same'
+    if (columnOf(cols, dragged) === col) return 'same'
     return statesFor(dragged, col).length ? 'ok' : 'no'
   }
 
-  const move = async (item: WorkItem, col: ColKey, to: string): Promise<void> => {
-    const category = COLS.find((c) => c.key === col)!.category
-    setPending((p) => new Map(p).set(item.id, { category, state: to }))
-    const done = await updateItem(item, { 'System.State': to })
+  const move = async (item: WorkItem, col: string, to: string): Promise<void> => {
+    const category = types.find((t) => t.name === item.type)?.states.find((s) => s.name === to)?.category ?? item.category
+    const fields = moveFields(board, cols, item, col, to)
+    if (!Object.keys(fields).length) return
+    const adoCol = cols.find((c) => c.key === col)?.ado?.name
+    setPending((p) => new Map(p).set(item.id, { category, state: to, boardColumn: adoCol ?? item.boardColumn }))
+    const done = await updateItem(item, fields)
     setPending((p) => {
       const n = new Map(p)
       n.delete(item.id)
       return n
     })
-    if (done) toast(`#${item.id} → ${done.state}`)
+    if (done) toast(`#${item.id} → ${adoCol && adoCol !== done.state ? `${adoCol} (${done.state})` : done.state}`)
   }
 
-  const drop = (e: DragEvent, col: ColKey): void => {
+  const drop = (e: DragEvent, col: string): void => {
     e.preventDefault()
     setOver(null)
     const item = dragged
@@ -85,7 +95,7 @@ export function Board(): ReactNode {
     if (!item || verdict(col) !== 'ok') return
     const states = statesFor(item, col)
     if (states.length === 1) void move(item, col, states[0])
-    else setChooser({ item, states, x: e.clientX, y: e.clientY })
+    else setChooser({ item, col, states, x: e.clientX, y: e.clientY })
   }
 
   return (
@@ -127,8 +137,12 @@ export function Board(): ReactNode {
       {work === null ? (
         <div className="empty">Loading your cards…</div>
       ) : (
-        <div className={`board ${dragged ? 'dragging-any' : ''}`}>
-          {COLS.map((c) => {
+        <div
+          className={`board ${board ? 'ado' : ''} ${dragged ? 'dragging-any' : ''}`}
+          style={board ? ({ '--cols': cols.length } as CSSProperties) : undefined}
+        >
+          {cols.map((c) => {
+            const list = byCol.get(c.key) ?? []
             const v = over === c.key ? verdict(c.key) : null
             return (
               <div
@@ -153,10 +167,10 @@ export function Board(): ReactNode {
                 onDrop={(e) => drop(e, c.key)}
               >
                 <h3>
-                  {c.label} <span className="pill">{cols[c.key].length}</span>
+                  <span className="ellipsis" title={c.label}>{c.label}</span> <span className="pill">{list.length}</span>
                 </h3>
                 {v === 'no' && dragged && <div className="drop-hint">{dragged.type} has no state for this column</div>}
-                {cols[c.key].map((i) => (
+                {list.map((i) => (
                   <Tile
                     key={i.id}
                     item={i}
@@ -170,7 +184,7 @@ export function Board(): ReactNode {
                     }}
                   />
                 ))}
-                {cols[c.key].length === 0 && <div className="faint small drop-empty">{dragged && v === 'ok' ? 'Drop here' : '—'}</div>}
+                {list.length === 0 && <div className="faint small drop-empty">{dragged && v === 'ok' ? 'Drop here' : '—'}</div>}
               </div>
             )
           })}
@@ -181,9 +195,8 @@ export function Board(): ReactNode {
         <StateChooser
           chooser={chooser}
           onPick={(s) => {
-            const col = COLS.find((c) => statesFor(chooser.item, c.key).includes(s))!.key
             setChooser(null)
-            void move(chooser.item, col, s)
+            void move(chooser.item, chooser.col, s)
           }}
           onClose={() => setChooser(null)}
         />

@@ -1194,3 +1194,15 @@ label.check input {
 .open-ado:focus-visible {
   opacity: 1;
 }
+/* columns from the team's ADO board: as many as it has, scrolling sideways when they don't fit */
+.board.ado {
+  grid-template-columns: repeat(var(--cols), minmax(190px, 1fr));
+  overflow-x: auto;
+  padding-bottom: 6px;
+}
+.board.ado .column h3 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}

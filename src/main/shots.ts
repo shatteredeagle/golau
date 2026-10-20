@@ -131,26 +131,34 @@ export async function runShots(d: ShotDeps, dir: string): Promise<void> {
   const inColumn = (id: number, col: string): Promise<unknown> => js(`!!document.querySelector('.column[data-col="${col}"] .tile[data-id="${id}"]')`)
   const outlined = (col: string, cls: string): Promise<unknown> => js(`document.querySelector('.column[data-col="${col}"]')?.classList.contains('${cls}') ?? false`)
 
-  // 1. a To do card onto Doing: outlined, then moved to Active
-  await dragTo(4106, 'doing', '03c-drag-over')
-  const ok1 = await outlined('doing', 'drop-ok')
-  await dropOn(4106, 'doing')
-  const moved = await inColumn(4106, 'doing')
-  // 2. a Scrum PBI over "Review / resolved": Scrum has no such state, so the column refuses it
-  await dragTo(4110, 'review', '03d-drag-blocked')
-  const blocked = await outlined('review', 'drop-no')
-  await dropOn(4110, 'review')
-  const stayed = await inColumn(4110, 'todo')
-  // 3. a resolved Bug onto Doing: two in-progress states, so a menu asks which
-  await dragTo(4109, 'doing', '03e-drag-bug')
-  await dropOn(4109, 'doing')
-  const menu = await js(`[...document.querySelectorAll('.state-chooser .btn')].map((b) => b.textContent)`)
-  await snap(d.main(), '03f-state-chooser')
-  await js(`[...document.querySelectorAll('.state-chooser .btn')].find((b) => b.textContent === 'In Test')?.click()`)
-  await wait(1500)
-  const chose = await inColumn(4109, 'doing')
-  console.log('dnd-check', JSON.stringify({ ok1, moved, blocked, stayed, menu, chose }))
-  if (!ok1 || !moved || !blocked || !stayed || JSON.stringify(menu) !== '["Active","In Test"]' || !chose) {
+  // the board shows the team's ADO columns, in board order
+  const heads = await js(`[...document.querySelectorAll('.board .column h3 .ellipsis')].map((h) => h.textContent)`)
+  console.log('board-columns', JSON.stringify(heads))
+  if (JSON.stringify(heads) !== '["New","Ready","Dev","Test","Review","Closed"]') {
+    console.error('BOARD CHECK FAILED: columns are not the ADO board columns')
+    failed = true
+  }
+  // 1. a New story onto Dev: outlined, then moved (state → Active)
+  await dragTo(4106, 'ado:Dev', '03c-drag-over')
+  const ok1 = await outlined('ado:Dev', 'drop-ok')
+  await dropOn(4106, 'ado:Dev')
+  const moved = await inColumn(4106, 'ado:Dev')
+  // 2. a PBI over Review: the board has no PBI state there, so the column refuses it
+  await dragTo(4110, 'ado:Review', '03d-drag-blocked')
+  const blocked = await outlined('ado:Review', 'drop-no')
+  await dropOn(4110, 'ado:Review')
+  const stayed = await inColumn(4110, 'ado:Ready')
+  // 3. an Active story from Dev to Test: same state, only the board column changes
+  await dragTo(4102, 'ado:Test', '03e-drag-column')
+  await dropOn(4102, 'ado:Test')
+  await js(`window.tl.call('getItem', 4102).then((i) => (window.__moved = i))`)
+  await wait(500)
+  const colOnly = (await js(`window.__moved && { state: window.__moved.state, column: window.__moved.boardColumn }`)) as { state?: string; column?: string }
+  const inTest = await inColumn(4102, 'ado:Test')
+  // 4. a Task (not on the story board) goes by state category: Active → the first in-progress column
+  const taskInDev = await inColumn(4103, 'ado:Dev')
+  console.log('dnd-check', JSON.stringify({ ok1, moved, blocked, stayed, colOnly, inTest, taskInDev }))
+  if (!ok1 || !moved || !blocked || !stayed || colOnly?.state !== 'Active' || colOnly?.column !== 'Test' || !inTest || !taskInDev) {
     console.error('DND CHECK FAILED')
     failed = true
   }

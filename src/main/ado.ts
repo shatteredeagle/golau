@@ -1,4 +1,5 @@
 import type {
+  BoardInfo,
   Comment,
   CreateItemInput,
   FieldError,
@@ -140,6 +141,7 @@ export class AdoClient {
   private typeFieldCache = new Map<string, FieldSpec[]>() // project|type
   private extraFieldsOk = true
   private timeEstimateRefs = new Map<string, string | undefined>() // by project
+  private boardCache?: { at: number; value: BoardInfo | undefined }
   private cfg: AdoConfig
 
   constructor(cfg: AdoConfig) {
@@ -200,6 +202,34 @@ export class AdoClient {
     return this.cfg.team
       ? `${this.projectUrl()}/_boards/board/t/${encodeURIComponent(this.cfg.team)}`
       : `${this.projectUrl()}/_boards/board`
+  }
+
+  /**
+   * The team's backlog-items board: the requirement backlog level (Stories / Backlog items / Issues),
+   * its columns in order and which state each type has in each column. Undefined without a team.
+   */
+  async getBoard(): Promise<BoardInfo | undefined> {
+    if (!this.cfg.team) return undefined
+    if (this.boardCache && Date.now() - this.boardCache.at < 5 * 60e3) return this.boardCache.value
+    const team = `${this.projectUrl()}/${encodeURIComponent(this.cfg.team)}`
+    const levels = await this.req<{ value: { id: string; name: string; type?: string }[] }>(`${team}/_apis/work/backlogs?${API}`)
+    const level = levels.value.find((l) => l.type === 'requirement') ?? levels.value.find((l) => l.id === 'Microsoft.RequirementCategory')
+    let value: BoardInfo | undefined
+    if (level) {
+      const b = await this.req<{
+        name: string
+        columns?: { name: string; columnType: BoardInfo['columns'][number]['columnType']; stateMappings?: Record<string, string> }[]
+        fields?: { columnField?: { referenceName?: string } }
+      }>(`${team}/_apis/work/boards/${encodeURIComponent(level.name)}?${API}`)
+      if (b.columns?.length)
+        value = {
+          name: b.name,
+          columnField: b.fields?.columnField?.referenceName,
+          columns: b.columns.map((c) => ({ name: c.name, columnType: c.columnType, stateMappings: c.stateMappings ?? {} }))
+        }
+    }
+    this.boardCache = { at: Date.now(), value }
+    return value
   }
 
   async getMe(): Promise<Person> {
