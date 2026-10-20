@@ -30,7 +30,14 @@ const TYPES = [
   name,
   color,
   isDisabled: false,
-  states: name === 'Product Backlog Item' ? SCRUM_STATES : name === 'Task' ? STATES.filter((s) => s.name !== 'Resolved') : STATES
+  states:
+    name === 'Product Backlog Item'
+      ? SCRUM_STATES
+      : name === 'Task'
+        ? STATES.filter((s) => s.name !== 'Resolved')
+        : name === 'Bug'
+          ? [...STATES.slice(0, 2), { name: 'In Test', color: '8a4fd8', category: 'InProgress' }, ...STATES.slice(2)]
+          : STATES
 }))
 
 // Field definitions (subset) and per-type rules, like a customised process would have.

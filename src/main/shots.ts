@@ -105,6 +105,46 @@ export async function runShots(d: ShotDeps, dir: string): Promise<void> {
   }
   await snap(d.main(), '03b-needs-fields')
   await esc()
+
+  // drag and drop on the board (synthetic HTML5 drag events, one step per React render)
+  const js = (code: string): Promise<unknown> => d.main()!.webContents.executeJavaScript(code)
+  const dragTo = async (id: number, col: string, name: string): Promise<void> => {
+    await js(`window.__dt = new DataTransfer(); document.querySelector('.tile[data-id="${id}"]')?.dispatchEvent(new DragEvent('dragstart', { bubbles: true, cancelable: true, dataTransfer: window.__dt }))`)
+    await wait(150)
+    await js(`(() => { const c = document.querySelector('.column[data-col="${col}"]'); for (const t of ['dragenter', 'dragover']) c.dispatchEvent(new DragEvent(t, { bubbles: true, cancelable: true, dataTransfer: window.__dt, clientX: 640, clientY: 360 })) })()`)
+    await wait(250)
+    await snap(d.main(), name)
+  }
+  const dropOn = async (id: number, col: string): Promise<void> => {
+    await js(`(() => { const c = document.querySelector('.column[data-col="${col}"]'); c.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: window.__dt, clientX: 640, clientY: 360 })); document.querySelector('.tile[data-id="${id}"]')?.dispatchEvent(new DragEvent('dragend', { bubbles: true, dataTransfer: window.__dt })) })()`)
+    await wait(1500)
+  }
+  const inColumn = (id: number, col: string): Promise<unknown> => js(`!!document.querySelector('.column[data-col="${col}"] .tile[data-id="${id}"]')`)
+  const outlined = (col: string, cls: string): Promise<unknown> => js(`document.querySelector('.column[data-col="${col}"]')?.classList.contains('${cls}') ?? false`)
+
+  // 1. a To do card onto Doing: outlined, then moved to Active
+  await dragTo(4106, 'doing', '03c-drag-over')
+  const ok1 = await outlined('doing', 'drop-ok')
+  await dropOn(4106, 'doing')
+  const moved = await inColumn(4106, 'doing')
+  // 2. a Scrum PBI over "Review / resolved": Scrum has no such state, so the column refuses it
+  await dragTo(4110, 'review', '03d-drag-blocked')
+  const blocked = await outlined('review', 'drop-no')
+  await dropOn(4110, 'review')
+  const stayed = await inColumn(4110, 'todo')
+  // 3. a resolved Bug onto Doing: two in-progress states, so a menu asks which
+  await dragTo(4109, 'doing', '03e-drag-bug')
+  await dropOn(4109, 'doing')
+  const menu = await js(`[...document.querySelectorAll('.state-chooser .btn')].map((b) => b.textContent)`)
+  await snap(d.main(), '03f-state-chooser')
+  await js(`[...document.querySelectorAll('.state-chooser .btn')].find((b) => b.textContent === 'In Test')?.click()`)
+  await wait(1500)
+  const chose = await inColumn(4109, 'doing')
+  console.log('dnd-check', JSON.stringify({ ok1, moved, blocked, stayed, menu, chose }))
+  if (!ok1 || !moved || !blocked || !stayed || JSON.stringify(menu) !== '["Active","In Test"]' || !chose) {
+    console.error('DND CHECK FAILED')
+    failed = true
+  }
   await route({ view: 'search' })
   await snap(d.main(), '04-search')
   await route({ view: 'item', id: 4105 })

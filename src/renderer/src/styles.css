@@ -1122,3 +1122,55 @@ label.check input {
   background: var(--accent);
   transition: width 0.3s;
 }
+
+/* ---------- board drag and drop ---------- */
+
+.tile[draggable='true'] {
+  cursor: grab;
+}
+.tile.dragging {
+  opacity: 0.4;
+}
+.tile.pending {
+  opacity: 0.75;
+}
+.column {
+  transition: outline-color 0.1s, background 0.1s;
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+}
+.column.drop-ok {
+  outline-color: var(--accent);
+  background: var(--accent-soft);
+}
+.column.drop-no {
+  outline: 2px dashed var(--red);
+  cursor: not-allowed;
+}
+.drop-hint {
+  margin: -4px 4px 2px;
+  font-size: 12px;
+  color: var(--red);
+}
+.drop-empty {
+  padding: 6px 4px;
+}
+.chooser-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+}
+.state-chooser {
+  position: fixed;
+  display: grid;
+  gap: 2px;
+  min-width: 190px;
+  padding: 6px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+}
+.state-chooser .btn {
+  justify-content: flex-start;
+}
