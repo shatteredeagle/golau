@@ -14,6 +14,15 @@ win:
   icon: build/icon.ico
   # rcedit runs under wine when building from Linux
   signAndEditExecutable: true
+# Hardening switches baked into the exe: no running it as plain Node, no NODE_OPTIONS or
+# --inspect injection, and only load the (integrity-checked) app.asar.
+electronFuses:
+  runAsNode: false
+  enableCookieEncryption: true
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true
 linux:
   target: [dir]
   icon: build/icon.png

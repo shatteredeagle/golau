@@ -31,18 +31,30 @@ Nudges only fire in your work hours, never while you're idle, one at a time, and
 
 Keys: `Ctrl+K` switch task · `Ctrl+N` new item · `/` search · `Esc` close.
 
+## Security
+
+Built to be safe on a work machine:
+
+- **Token:** stored only encrypted (Windows DPAPI via Electron safeStorage); if no OS key store exists it stays in memory. It's only ever sent to `https://dev.azure.com/<org>` or `https://<org>.visualstudio.com`, redirects aren't followed, and it's never logged.
+- **Untrusted work item HTML** (descriptions, comments by other people) is sanitized with DOMPurify: scripts, iframes, SVG, forms and inline styles are stripped, links survive only as absolute `http(s)` URLs that open in your browser, and images become `[image]` links so nothing is fetched (no tracking pixels, no `\\host\share` paths that would leak Windows credentials).
+- **The UI has no network access at all**: every request from the web layer except the app's own files is cancelled; Azure DevOps and the BUSY Bar are called from the main process. CSP is `default-src 'none'`.
+- **Electron hardening:** sandboxed renderers, context isolation, no Node in the UI, no webviews, navigation and new windows blocked, all browser permissions denied, IPC accepts calls only from the app's own page and only for known methods, with ids and field names validated.
+- **Packaged exe:** fuses disable run-as-Node, `NODE_OPTIONS` and `--inspect`; only the integrity-checked `app.asar` loads; DevTools and the dev/test switches (`TASKLIGHT_*`, `ELECTRON_RENDERER_URL`) are off.
+- **Data:** `state.json`/`settings.json` are written atomically (fsync + rename) with a `.bak`; after a crash or forced reboot the running timer is cut off at the last minute the app was alive instead of counting the downtime.
+- Not code-signed: SmartScreen warns, and a locked-down laptop (AppLocker/WDAC) may refuse to run unsigned apps.
+
 ## Develop
 
 ```bash
 npm ci && node node_modules/electron/install.js   # npm 12 blocks Electron's postinstall
 npm run mock     # fake ADO at http://localhost:7071/mockorg (project Platform), any PAT
 npm run dev      # app with hot reload
-npm test         # nudge-rule tests (fake clock)
+npm test         # nudge-rule + security tests
 npm run shots    # renders every screen offscreen to .shots/*.png (needs the mock running)
 npm run dist:win # dist/Tasklight-<version>-win.zip (builds from Linux; rcedit runs under wine)
 ```
 
-Data lives in `%APPDATA%\Tasklight` (`settings.json`, `state.json`, `secrets.bin`). Override with `TASKLIGHT_DATA`.
+Data lives in `%APPDATA%\Tasklight` (`settings.json`, `state.json`, `secrets.bin`). `TASKLIGHT_DATA` overrides it when running from source (ignored in the packaged app).
 
 ### Layout
 

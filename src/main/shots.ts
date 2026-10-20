@@ -79,6 +79,27 @@ export async function runShots(d: ShotDeps, dir: string): Promise<void> {
   await route({ view: 'item', id: 4105 })
   await snap(d.main(), '05-item')
   await esc()
+
+  // security check: hostile work item HTML must come out inert
+  const ids = (await d.main()?.webContents.executeJavaScript(
+    `window.tl.call('search', { text: 'Hostile', status: 'any', assigned: 'anyone' }).then(r => r.map(i => i.id))`
+  )) as number[]
+  if (ids?.length) {
+    await route({ view: 'item', id: ids[0] })
+    await wait(1200)
+    const report = await d.main()?.webContents.executeJavaScript(`(() => {
+      const box = [...document.querySelectorAll('.drawer .html')][0]
+      if (!box) return { error: 'no description rendered' }
+      return {
+        imgs: box.querySelectorAll('img').length,
+        hrefs: [...box.querySelectorAll('a')].map(a => a.getAttribute('href')),
+        dangerous: box.querySelectorAll('iframe,svg,form,input,script,[onerror],[onload]').length
+      }
+    })()`)
+    console.log('security-check', JSON.stringify(report))
+    await snap(d.main(), '05b-hostile-item')
+    await esc()
+  }
   await route({ view: 'today' })
   await route({ view: 'pick' })
   await snap(d.main(), '06-pick')

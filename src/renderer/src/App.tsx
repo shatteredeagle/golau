@@ -69,8 +69,12 @@ export function App(): ReactNode {
   const toast = useCallback<Ctx['toast']>((msg, opts) => {
     const id = Date.now() + Math.random()
     setToasts((t) => [...t.slice(-2), { id, msg, ...opts }])
-    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), opts?.action ? 9000 : 4000)
+    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), opts?.action || opts?.error ? 9000 : 4000)
   }, [])
+
+  useEffect(() => {
+    void call('startupWarnings').then((w) => w.forEach((m) => toast(m, { error: true })))
+  }, [toast])
 
   const go = useCallback((r: Route) => {
     if (r.view === 'item') setItem(r.id)

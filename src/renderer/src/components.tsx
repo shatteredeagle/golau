@@ -145,9 +145,40 @@ export function useStartFocus(): (item: WorkItem) => Promise<void> {
   }
 }
 
+// Work item HTML is written by other people, so treat it as hostile:
+// - links survive only as absolute http(s) URLs (no //host, relative or file: links, which would
+//   resolve to Windows network paths from a file:// page)
+// - images are replaced by a link: ADO images need auth anyway, and loading them could leak your
+//   IP or, for //host paths, your Windows login hash
+DOMPurify.addHook('afterSanitizeAttributes', (node) => {
+  if (node.tagName === 'A') {
+    const href = node.getAttribute('href') ?? ''
+    if (/^https?:\/\//i.test(href)) {
+      node.setAttribute('target', '_blank')
+      node.setAttribute('rel', 'noopener noreferrer')
+    } else node.removeAttribute('href')
+  }
+})
+/** Turn <img> into "[image]" links inside an inert document (DOMParser never fetches resources). */
+function imagesToLinks(html: string): string {
+  const doc = new DOMParser().parseFromString(html, 'text/html')
+  for (const img of Array.from(doc.querySelectorAll('img'))) {
+    const a = doc.createElement('a')
+    a.textContent = '[image]'
+    const src = img.getAttribute('src') ?? ''
+    if (/^https?:\/\//i.test(src)) a.setAttribute('href', src)
+    img.replaceWith(a)
+  }
+  return doc.body.innerHTML
+}
+
 export function Html({ html }: { html?: string }): ReactNode {
   if (!html) return <div className="faint small">Nothing here.</div>
-  const clean = DOMPurify.sanitize(html, { FORBID_TAGS: ['style', 'form', 'input'], FORBID_ATTR: ['style'] })
+  const clean = DOMPurify.sanitize(imagesToLinks(html), {
+    FORBID_TAGS: ['img', 'style', 'form', 'input', 'button', 'textarea', 'select', 'iframe', 'object', 'embed', 'svg', 'math', 'video', 'audio', 'source', 'picture', 'link', 'meta', 'base'],
+    FORBID_ATTR: ['style', 'srcset', 'background', 'poster', 'formaction'],
+    ALLOW_DATA_ATTR: false
+  })
   return <div className="html" dangerouslySetInnerHTML={{ __html: clean }} />
 }
 

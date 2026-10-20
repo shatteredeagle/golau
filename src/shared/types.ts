@@ -176,6 +176,8 @@ export interface AppState {
   wins: Win[]
   /** quiet mode: no nudges until this time */
   quietUntil?: number
+  /** last time state.json was written; used to cut off sessions after a crash or reboot */
+  savedAt?: number
   /** item cache so the UI has titles offline */
   titles: Record<number, { title: string; type: string; state: string }>
 }

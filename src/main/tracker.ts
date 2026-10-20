@@ -11,9 +11,15 @@ import type { Store } from './store'
 export class Tracker extends EventEmitter {
   constructor(private store: Store) {
     super()
-    // A crash or reboot can leave a session open; close it at the last save time.
-    const open = this.s.sessions.filter((x) => x.end == null)
-    if (open.length && !this.s.focus) open.forEach((x) => (x.end = x.start))
+    // A crash, reboot or kill leaves a session open. Close it at the last time we saved
+    // (state is saved at least once a minute while a timer runs) and park the focus as paused,
+    // so the downtime isn't counted as work and the welcome-back prompt offers to resume.
+    const lastSeen = this.s.savedAt ?? Date.now()
+    for (const x of this.s.sessions) if (x.end == null) x.end = Math.max(x.start, Math.min(lastSeen, Date.now()))
+    if (this.s.focus) {
+      this.s.paused = { focus: this.s.focus, reason: 'idle', at: lastSeen }
+      this.s.focus = null
+    }
   }
 
   get s(): AppState {

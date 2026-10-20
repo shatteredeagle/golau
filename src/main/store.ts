@@ -1,7 +1,8 @@
 import { app, safeStorage } from 'electron'
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'fs'
+import { closeSync, copyFileSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, renameSync, writeSync } from 'fs'
 import { join } from 'path'
 import type { AppState, Settings } from '../shared/types'
+import { devEnv } from './env'
 
 export const DEFAULT_SETTINGS: Settings = {
   orgUrl: '',
@@ -44,27 +45,51 @@ const EMPTY_STATE: AppState = {
 }
 
 const dir = (): string => {
-  const d = process.env.TASKLIGHT_DATA ?? app.getPath('userData')
+  const d = devEnv('TASKLIGHT_DATA') ?? app.getPath('userData')
   if (!existsSync(d)) mkdirSync(d, { recursive: true })
   return d
 }
 
+/** Problems found while loading, shown to the user once the window is up. */
+export const loadWarnings: string[] = []
+
 function readJson<T>(name: string, fallback: T): T {
   const p = join(dir(), name)
-  if (!existsSync(p)) return structuredClone(fallback)
-  try {
-    return { ...structuredClone(fallback), ...JSON.parse(readFileSync(p, 'utf8')) }
-  } catch {
-    // keep the broken file for inspection, start fresh
-    renameSync(p, `${p}.broken-${Date.now()}`)
-    return structuredClone(fallback)
+  let broken = false
+  for (const candidate of [p, `${p}.bak`]) {
+    if (!existsSync(candidate)) continue
+    try {
+      const data = { ...structuredClone(fallback), ...JSON.parse(readFileSync(candidate, 'utf8')) }
+      if (broken) loadWarnings.push(`${name} was damaged; restored the previous copy.`)
+      return data
+    } catch {
+      // keep the broken file for inspection and try the backup
+      if (candidate === p) {
+        broken = true
+        renameSync(p, `${p}.broken-${Date.now()}`)
+      }
+    }
   }
+  if (broken) loadWarnings.push(`${name} could not be read and had no usable backup; starting fresh.`)
+  return structuredClone(fallback)
+}
+
+/** Write via temp file + fsync + rename, keeping the previous version as .bak. */
+function writeFileAtomic(p: string, data: string | Buffer): void {
+  const fd = openSync(`${p}.tmp`, 'w', 0o600)
+  try {
+    if (typeof data === 'string') writeSync(fd, data)
+    else writeSync(fd, data, 0, data.length)
+    fsyncSync(fd)
+  } finally {
+    closeSync(fd)
+  }
+  if (existsSync(p)) copyFileSync(p, `${p}.bak`)
+  renameSync(`${p}.tmp`, p)
 }
 
 function writeJson(name: string, data: unknown): void {
-  const p = join(dir(), name)
-  writeFileSync(`${p}.tmp`, JSON.stringify(data, null, 2))
-  renameSync(`${p}.tmp`, p)
+  writeFileAtomic(join(dir(), name), JSON.stringify(data, null, 2))
 }
 
 type Secrets = { pat?: string; busybarKey?: string }
@@ -83,30 +108,39 @@ export class Store {
     this.secrets = this.loadSecrets()
     this.settings.hasPat = !!this.secrets.pat
     this.settings.busybar.hasKey = !!this.secrets.busybarKey
+    if (!this.secureStorage)
+      loadWarnings.push('This system has no secure key store, so your token is kept in memory only and you\'ll need to enter it again next launch.')
     this.prune()
+  }
+
+  /** DPAPI on Windows, Keychain on macOS, libsecret/kwallet on Linux. Never plaintext on disk. */
+  get secureStorage(): boolean {
+    if (!safeStorage.isEncryptionAvailable()) return false
+    // Linux without a keyring falls back to a hard-coded key; treat that as not secure.
+    const backend = process.platform === 'linux' ? safeStorage.getSelectedStorageBackend?.() : 'os'
+    return backend !== 'basic_text' && backend !== 'unknown'
   }
 
   private loadSecrets(): Secrets {
     const p = join(dir(), 'secrets.bin')
-    if (!existsSync(p)) return {}
+    if (!existsSync(p) || !safeStorage.isEncryptionAvailable()) return {}
     try {
-      const buf = readFileSync(p)
-      const json = safeStorage.isEncryptionAvailable() ? safeStorage.decryptString(buf) : buf.toString('utf8')
-      return JSON.parse(json)
+      return JSON.parse(safeStorage.decryptString(readFileSync(p)))
     } catch {
+      // encrypted for another Windows user/machine: ask for the token again
+      loadWarnings.push('Your saved token could not be decrypted (different Windows user?). Please enter it again in Settings.')
       return {}
     }
   }
 
   private saveSecrets(): void {
-    const json = JSON.stringify(this.secrets)
-    // DPAPI on Windows, keychain/libsecret elsewhere
-    const data = safeStorage.isEncryptionAvailable() ? safeStorage.encryptString(json) : Buffer.from(json)
-    writeFileSync(join(dir(), 'secrets.bin'), data)
+    // Without OS encryption the secrets stay in memory for this session only.
+    if (!this.secureStorage) return
+    writeFileAtomic(join(dir(), 'secrets.bin'), safeStorage.encryptString(JSON.stringify(this.secrets)))
   }
 
   get pat(): string | undefined {
-    return process.env.TASKLIGHT_PAT ?? this.secrets.pat
+    return devEnv('TASKLIGHT_PAT') ?? this.secrets.pat
   }
 
   get busybarKey(): string | undefined {
@@ -132,11 +166,12 @@ export class Store {
   /** debounced write of state.json */
   saveState(): void {
     clearTimeout(this.saveTimer)
-    this.saveTimer = setTimeout(() => writeJson('state.json', this.state), 300)
+    this.saveTimer = setTimeout(() => this.flush(), 300)
   }
 
   flush(): void {
     clearTimeout(this.saveTimer)
+    this.state.savedAt = Date.now()
     writeJson('state.json', this.state)
   }
 

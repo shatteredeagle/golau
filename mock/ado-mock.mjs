@@ -64,6 +64,12 @@ add('Bug', 'Login redirect loops when cookie is stale', 'Active', { changed: 4, 
   { id: 1, text: '<div>Repro in staging with an expired cookie.</div>', createdBy: { displayName: 'Sam Rivera' }, createdDate: iso(4) }
 ] })
 add('User Story', 'Audit log export to CSV', 'New', { changed: 1, tags: 'reporting' })
+// hostile content: the app must render this inert (see shots security check)
+add('Bug', 'Hostile description test', 'New', { assigned: null, changed: 30, description:
+  '<p>Normal <a href="https://example.com/ok">https link</a></p>' +
+  '<a href="//evil.example/share/x.html">protocol-relative</a> <a href="file:///C:/Windows/win.ini">file</a> ' +
+  '<a href="javascript:alert(1)">js</a> <img src="//evil.example/share/pixel.png"> <img src=x onerror="window.tl.call(\'getSettings\')"> ' +
+  '<iframe src="https://evil.example"></iframe><svg onload="alert(1)"></svg><form action="https://evil.example"><input name=a></form>' })
 add('Task', 'Write runbook for cert rotation', 'New', { changed: 8, remaining: 3 })
 add('Bug', 'Dashboard tiles flicker on resize', 'Resolved', { changed: 1 })
 add('Task', 'Update pipeline to Node 24', 'Closed', { changed: 0 })
@@ -204,4 +210,5 @@ http
       return json(res, 400, { message: String(e) })
     }
   })
-  .listen(PORT, () => console.log(`ADO mock on http://localhost:${PORT}/${ORG}  (project Platform, team "Platform Team")`))
+  // localhost only: this server evaluates query text and must never be reachable from the LAN
+  .listen(PORT, '127.0.0.1', () => console.log(`ADO mock on http://localhost:${PORT}/${ORG}  (project Platform, team "Platform Team")`))

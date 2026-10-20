@@ -1,16 +1,21 @@
-import { app, BrowserWindow, globalShortcut, ipcMain, Menu, nativeImage, powerMonitor, shell, Tray } from 'electron'
+import { app, BrowserWindow, clipboard, globalShortcut, ipcMain, Menu, nativeImage, powerMonitor, session, Tray } from 'electron'
 import { join } from 'path'
-import { AdoClient, AdoError } from './ado'
+import { pathToFileURL } from 'url'
+import { AdoClient, AdoError, checkOrgUrl } from './ado'
+import { DEV, devEnv } from './env'
 import { BusyBar } from './busybar'
 import { Scheduler } from './scheduler'
-import { Store } from './store'
+import { loadWarnings, Store } from './store'
 import { Tracker } from './tracker'
-import { createCapture, createMain, createMini, createNudge, placeNudge } from './windows'
+import { createCapture, createMain, createMini, createNudge, isAppUrl, openLink, placeNudge } from './windows'
 import { runShots } from './shots'
 import { fmtDur } from '../shared/time'
 import type { CreateItemInput, Nudge, Route, SearchQuery, Settings, WorkItem } from '../shared/types'
 
-if (!app.requestSingleInstanceLock()) app.quit()
+if (!app.requestSingleInstanceLock()) {
+  app.quit()
+  process.exit(0)
+}
 app.setAppUserModelId('com.tasklight.app')
 
 let store: Store
@@ -39,7 +44,7 @@ const iconPath = (): string =>
 function client(): AdoClient {
   const s = store.settings
   if (!s.orgUrl || !store.pat) throw new AdoError('Not connected yet. Add your org URL and PAT in Settings.', 0)
-  ado ??= new AdoClient({ orgUrl: s.orgUrl, project: s.project, team: s.team, pat: store.pat })
+  ado ??= new AdoClient({ orgUrl: s.orgUrl, project: s.project, team: s.team, pat: store.pat, allowLocal: DEV })
   return ado
 }
 
@@ -335,6 +340,9 @@ const api = {
   getSettings: () => store.settings,
   saveSettings: (patch: Partial<Settings>) => {
     const before = store.settings
+    if (patch.orgUrl !== undefined) patch = { ...patch, orgUrl: checkOrgUrl(patch.orgUrl, DEV) }
+    if (patch.busybar?.host && !/^[a-z0-9.-]+(:\d{1,5})?$/i.test(patch.busybar.host))
+      throw new Error('BUSY Bar address should be a host name or IP, like busybar.lan or 192.168.1.50')
     const s = store.saveSettings(patch)
     if (before.orgUrl !== s.orgUrl || before.project !== s.project || before.team !== s.team) resetClient()
     if (before.captureHotkey !== s.captureHotkey) registerHotkey()
@@ -358,14 +366,15 @@ const api = {
   },
   /** Validate org + PAT before saving. Uses the saved PAT when none is passed. */
   testConnection: async (orgUrl: string, pat?: string) => {
-    const c = new AdoClient({ orgUrl, project: '', team: '', pat: pat || store.pat || '' })
+    const c = new AdoClient({ orgUrl, project: '', team: '', pat: pat || store.pat || '', allowLocal: DEV })
     const me = await c.getMe()
     const projects = await c.listProjects()
     return { me, projects }
   },
   listTeams: async (orgUrl: string, project: string, pat?: string) =>
-    new AdoClient({ orgUrl, project, team: '', pat: pat || store.pat || '' }).listTeams(project),
+    new AdoClient({ orgUrl, project, team: '', pat: pat || store.pat || '', allowLocal: DEV }).listTeams(project),
   connStatus: () => lastError,
+  startupWarnings: () => loadWarnings.splice(0),
   me: () => guarded(() => client().getMe()),
 
   // work items
@@ -409,9 +418,8 @@ const api = {
     return item
   },
   types: () => guarded(() => client().getTypes()),
-  openExternal: (url: string) => {
-    if (/^https?:\/\//.test(url)) void shell.openExternal(url)
-  },
+  openExternal: (url: string) => openLink(url),
+  copyText: (text: string) => clipboard.writeText(String(text).slice(0, 10000)),
 
   // focus journal
   getState: () => tracker.s,
@@ -476,9 +484,13 @@ const api = {
 
 export type Api = typeof api
 
-ipcMain.handle('tl', async (_e, method: keyof Api, ...args: unknown[]) => {
-  const fn = api[method] as (...a: unknown[]) => unknown
-  if (typeof fn !== 'function') throw new Error(`unknown api ${String(method)}`)
+const API_METHODS = new Set(Object.keys(api))
+
+ipcMain.handle('tl', async (e, method: unknown, ...args: unknown[]) => {
+  // only our own page may call in, and only names that are really on the api object
+  if (!e.senderFrame || !isAppUrl(e.senderFrame.url)) throw new Error('untrusted sender')
+  if (typeof method !== 'string' || !API_METHODS.has(method)) throw new Error(`unknown api ${String(method)}`)
+  const fn = api[method as keyof Api] as (...a: unknown[]) => unknown
   return fn(...args)
 })
 
@@ -486,13 +498,45 @@ ipcMain.handle('tl', async (_e, method: keyof Api, ...args: unknown[]) => {
 
 app.on('second-instance', () => showMain())
 
-const SHOTS = process.env.TASKLIGHT_SHOTS
+const SHOTS = devEnv('TASKLIGHT_SHOTS')
 if (SHOTS) {
   // never put anything on the real screen in screenshot mode
   for (const m of ['show', 'showInactive', 'focus'] as const) BrowserWindow.prototype[m] = function () {}
 }
 
+// Defense in depth for every webContents, including ones we didn't create on purpose.
+app.on('web-contents-created', (_e, wc) => {
+  wc.on('will-attach-webview', (ev) => ev.preventDefault())
+  wc.setWindowOpenHandler(({ url }) => {
+    openLink(url)
+    return { action: 'deny' }
+  })
+})
+
 app.whenReady().then(() => {
+  // the app needs no camera/mic/notifications/geolocation/etc. from the web layer
+  session.defaultSession.setPermissionRequestHandler((_wc, _perm, cb) => cb(false))
+  session.defaultSession.setPermissionCheckHandler(() => false)
+  // The UI never needs the network: Azure DevOps and the BUSY Bar are called from this process.
+  // So the web layer may load only the app's own files; everything else (remote images, tracking
+  // pixels, \\host\share paths that would hand Windows credentials to a stranger) is cancelled.
+  const appFiles = decodeURI(pathToFileURL(join(__dirname, '..')).href).toLowerCase()
+  const devUrl = devEnv('ELECTRON_RENDERER_URL')
+  session.defaultSession.webRequest.onBeforeRequest((details, cb) => {
+    const u = details.url
+    let ok = u.startsWith('data:') || u.startsWith('devtools:')
+    if (!ok && u.startsWith('file:')) {
+      try {
+        ok = decodeURI(u).toLowerCase().startsWith(appFiles)
+      } catch {
+        ok = false
+      }
+    }
+    if (!ok && devUrl) ok = u.startsWith(new URL(devUrl).origin) || /^wss?:\/\/localhost[:/]/.test(u)
+    cb({ cancel: !ok })
+  })
+  if (!DEV) Menu.setApplicationMenu(null)
+
   store = new Store()
   tracker = new Tracker(store)
   busybar = new BusyBar(() => ({ ...store.settings.busybar, key: store.busybarKey }))
@@ -501,7 +545,7 @@ app.whenReady().then(() => {
   scheduler = new Scheduler({
     settings: () => store.settings,
     tracker,
-    idleSeconds: () => (process.env.TASKLIGHT_FAKE_IDLE ? Number(process.env.TASKLIGHT_FAKE_IDLE) : powerMonitor.getSystemIdleTime()),
+    idleSeconds: () => (devEnv('TASKLIGHT_FAKE_IDLE') ? Number(devEnv('TASKLIGHT_FAKE_IDLE')) : powerMonitor.getSystemIdleTime()),
     myWork: () => workCache,
     isNudgeShowing: () => !!currentNudge,
     show: showNudge,
@@ -552,6 +596,8 @@ app.whenReady().then(() => {
   setInterval(() => {
     updateTray()
     void busybar.update(tracker.s).catch(() => undefined)
+    // heartbeat: lets a crash/reboot be cut off at the last minute we knew you were here
+    if (tracker.s.focus) store.saveState()
   }, 60000)
   if (store.settings.hasPat) void myWork(true).catch(() => undefined)
 
@@ -566,6 +612,8 @@ app.on('window-all-closed', () => {
   // stay in the tray
 })
 
+// Windows restart/logoff doesn't always reach before-quit; save on the way down regardless.
+powerMonitor.on('shutdown', () => store?.flush())
 app.on('before-quit', () => {
   quitting = true
   store?.flush()

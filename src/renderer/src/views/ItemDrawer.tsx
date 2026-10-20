@@ -73,7 +73,7 @@ export function ItemDrawer({ id, onClose }: { id: number; onClose: () => void })
           <button
             className="icon-btn"
             title="Copy link"
-            onClick={() => item && void navigator.clipboard.writeText(item.webUrl).then(() => toast('Link copied'))}
+            onClick={() => item && void call('copyText', item.webUrl).then(() => toast('Link copied'))}
           >
             <Copy size={14} />
           </button>

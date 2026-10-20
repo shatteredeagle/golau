@@ -1,23 +1,52 @@
 import { BrowserWindow, screen, shell } from 'electron'
 import { join } from 'path'
+import { pathToFileURL } from 'url'
+import { DEV, devEnv } from './env'
 
 export type Surface = 'main' | 'nudge' | 'mini' | 'capture'
 
 const preload = join(__dirname, '../preload/index.js')
 
+const DEV_URL = devEnv('ELECTRON_RENDERER_URL')
+
+/** The only page our windows ever show (and the only frames allowed to call the IPC API). */
+export function isAppUrl(url: string): boolean {
+  const page = url.split('#')[0]
+  if (DEV_URL) return page.startsWith(DEV_URL)
+  const want = pathToFileURL(join(__dirname, '../renderer/index.html')).href
+  try {
+    return decodeURI(page).toLowerCase() === decodeURI(want).toLowerCase()
+  } catch {
+    return false
+  }
+}
+
+/** Open a link from work item content in the real browser; anything but http(s) is dropped. */
+export function openLink(url: string): void {
+  try {
+    const u = new URL(url)
+    if (u.protocol === 'https:' || u.protocol === 'http:') void shell.openExternal(u.toString())
+  } catch {
+    /* not a URL */
+  }
+}
+
 function load(win: BrowserWindow, surface: Surface): void {
-  if (process.env.ELECTRON_RENDERER_URL) void win.loadURL(`${process.env.ELECTRON_RENDERER_URL}#${surface}`)
+  if (DEV_URL) void win.loadURL(`${DEV_URL}#${surface}`)
   else void win.loadFile(join(__dirname, '../renderer/index.html'), { hash: surface })
   // links open in the real browser, never inside the app
   win.webContents.setWindowOpenHandler(({ url }) => {
-    if (/^https?:/.test(url)) void shell.openExternal(url)
+    openLink(url)
     return { action: 'deny' }
   })
+  // the app never navigates away from its one page (routing is in-page)
   win.webContents.on('will-navigate', (e, url) => {
-    if (!url.startsWith('file:') && !url.startsWith(process.env.ELECTRON_RENDERER_URL ?? '\0')) {
-      e.preventDefault()
-      if (/^https?:/.test(url)) void shell.openExternal(url)
-    }
+    if (isAppUrl(url)) return
+    e.preventDefault()
+    openLink(url)
+  })
+  win.webContents.on('will-redirect', (e, url) => {
+    if (!isAppUrl(url)) e.preventDefault()
   })
 }
 
@@ -26,11 +55,14 @@ const common = {
   autoHideMenuBar: true,
   webPreferences: {
     preload,
-    sandbox: false,
+    sandbox: true,
     contextIsolation: true,
     nodeIntegration: false,
+    webviewTag: false,
+    spellcheck: false,
+    devTools: DEV,
     // dev screenshot mode renders without ever putting a window on screen
-    offscreen: !!process.env.TASKLIGHT_SHOTS
+    offscreen: !!devEnv('TASKLIGHT_SHOTS')
   }
 }
 

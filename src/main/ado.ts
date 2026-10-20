@@ -47,9 +47,47 @@ export interface AdoConfig {
   project: string
   team: string
   pat: string
+  /** dev only: allow http://localhost (the mock server) */
+  allowLocal?: boolean
 }
 
-const wiqlString = (s: string): string => `'${s.replace(/'/g, "''")}'`
+/**
+ * The PAT is only ever sent to Azure DevOps. Returns the normalized org URL or throws.
+ * Accepts https://dev.azure.com/<org> and https://<org>.visualstudio.com.
+ */
+export function checkOrgUrl(raw: string, allowLocal = false): string {
+  let u: URL
+  try {
+    u = new URL(raw.trim())
+  } catch {
+    throw new AdoError('That doesn\'t look like a URL. Use https://dev.azure.com/<your-org>', 0)
+  }
+  const host = u.hostname.toLowerCase()
+  const azure =
+    u.protocol === 'https:' && !u.port && (host === 'dev.azure.com' || /^[a-z0-9][a-z0-9-]*\.visualstudio\.com$/.test(host))
+  const local = allowLocal && u.protocol === 'http:' && (host === 'localhost' || host === '127.0.0.1')
+  if (!azure && !local) throw new AdoError('Organization URL must be https://dev.azure.com/<org> or https://<org>.visualstudio.com', 0)
+  if (u.username || u.password || u.search || u.hash) throw new AdoError('Organization URL can\'t contain credentials or query strings', 0)
+  const parts = u.pathname.split('/').filter(Boolean)
+  // dev.azure.com needs the org segment; keep only that (a pasted board URL works too)
+  if (host === 'dev.azure.com') {
+    if (!parts[0]) throw new AdoError('Add your organization: https://dev.azure.com/<org>', 0)
+    return `https://dev.azure.com/${parts[0]}`
+  }
+  return local ? `${u.origin}/${parts[0] ?? ''}`.replace(/\/$/, '') : u.origin
+}
+
+const wiqlString = (s: string): string => `'${String(s).replace(/'/g, "''")}'`
+
+/** IPC inputs come from the renderer; never let them shape URLs or patch paths freely. */
+export function assertId(id: unknown): number {
+  if (typeof id !== 'number' || !Number.isSafeInteger(id) || id <= 0) throw new AdoError(`Bad work item id: ${String(id)}`, 0)
+  return id
+}
+const assertField = (name: string): string => {
+  if (!/^[A-Za-z][\w.]*$/.test(name)) throw new AdoError(`Bad field name: ${name}`, 0)
+  return name
+}
 
 export class AdoClient {
   private me?: Person
@@ -58,7 +96,7 @@ export class AdoClient {
   private cfg: AdoConfig
 
   constructor(cfg: AdoConfig) {
-    this.cfg = cfg
+    this.cfg = { ...cfg, orgUrl: checkOrgUrl(cfg.orgUrl, cfg.allowLocal) }
   }
 
   get org(): string {
@@ -79,8 +117,13 @@ export class AdoClient {
         'Content-Type': 'application/json',
         ...(init.headers ?? {})
       },
-      signal: AbortSignal.timeout(20000)
+      signal: AbortSignal.timeout(20000),
+      // never follow redirects with the token attached (ADO redirects bad tokens to a sign-in page)
+      redirect: 'manual'
     })
+    if (res.status >= 300 && res.status < 400) {
+      throw new AdoError('Azure DevOps rejected the token (expired or wrong scope?)', 401)
+    }
     const text = await res.text()
     // A bad/expired PAT gets a 203 + sign-in HTML page instead of a 401.
     if (res.status === 203 || (res.ok && text.trimStart().startsWith('<'))) {
@@ -242,6 +285,7 @@ export class AdoClient {
   }
 
   async getItems(ids: number[]): Promise<WorkItem[]> {
+    ids.forEach(assertId)
     if (ids.length === 0) return []
     const out: { id: number; rev: number; fields: Record<string, unknown> }[] = []
     for (let i = 0; i < ids.length; i += 200) {
@@ -268,6 +312,7 @@ export class AdoClient {
   }
 
   async getItem(id: number): Promise<WorkItem> {
+    assertId(id)
     const r = await this.req<{ id: number; rev: number; fields: Record<string, unknown> }>(
       `${this.org}/_apis/wit/workitems/${id}?${API}`
     )
@@ -328,6 +373,7 @@ export class AdoClient {
   }
 
   async getDetails(id: number): Promise<WorkItem> {
+    assertId(id)
     const r = await this.req<{ id: number; rev: number; fields: Record<string, unknown> }>(
       `${this.org}/_apis/wit/workitems/${id}?${API}`
     )
@@ -336,6 +382,7 @@ export class AdoClient {
   }
 
   async getComments(id: number, project = this.cfg.project): Promise<Comment[]> {
+    assertId(id)
     const data = await this.req<{
       comments: { id: number; text: string; createdBy: { displayName: string }; createdDate: string }[]
     }>(`${this.projectUrl(project)}/_apis/wit/workItems/${id}/comments?$top=100&order=desc&${COMMENTS_API}`)
@@ -348,6 +395,7 @@ export class AdoClient {
   }
 
   async addComment(id: number, html: string, project = this.cfg.project): Promise<void> {
+    assertId(id)
     await this.req(`${this.projectUrl(project)}/_apis/wit/workItems/${id}/comments?${COMMENTS_API}`, {
       method: 'POST',
       body: JSON.stringify({ text: html })
@@ -356,8 +404,9 @@ export class AdoClient {
 
   /** fields: ADO reference name → value (null removes) */
   async updateItem(id: number, fields: Record<string, unknown>): Promise<WorkItem> {
+    assertId(id)
     const ops = Object.entries(fields).map(([k, v]) =>
-      v === null ? { op: 'remove', path: `/fields/${k}` } : { op: 'add', path: `/fields/${k}`, value: v }
+      v === null ? { op: 'remove', path: `/fields/${assertField(k)}` } : { op: 'add', path: `/fields/${assertField(k)}`, value: v }
     )
     await this.req(`${this.org}/_apis/wit/workitems/${id}?${API}`, {
       method: 'PATCH',
@@ -394,6 +443,7 @@ export class AdoClient {
     if (input.tags?.length) ops.push({ op: 'add', path: '/fields/System.Tags', value: input.tags.join('; ') })
     if (input.remainingWork != null)
       ops.push({ op: 'add', path: '/fields/Microsoft.VSTS.Scheduling.RemainingWork', value: input.remainingWork })
+    if (input.parentId) assertId(input.parentId)
     if (input.parentId)
       ops.push({
         op: 'add',
