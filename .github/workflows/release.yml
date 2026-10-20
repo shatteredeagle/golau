@@ -1,5 +1,7 @@
 # Push a tag like v0.2.0 (matching package.json "version") to build on Windows and publish a
-# GitHub Release with the zip + SHA256SUMS. Versions with a hyphen (v0.2.0-beta.1) are prereleases.
+# GitHub Release with the installer + SHA256SUMS. Versions with a hyphen (v0.2.0-beta.1) are
+# prereleases. Signing via SignPath switches on when its repository variables exist (see
+# docs/signpath.md); until then releases are unsigned.
 name: Release
 
 on:
@@ -17,7 +19,11 @@ jobs:
   build:
     name: Build Windows release
     runs-on: windows-latest
-    timeout-minutes: 30
+    # long enough to approve two SignPath requests
+    timeout-minutes: 150
+    permissions:
+      contents: read
+      actions: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -42,8 +48,9 @@ jobs:
       - run: npm run typecheck
       - run: npm test
 
-      - name: Package
-        run: npm run build && npx electron-builder --win nsis --x64 --publish never
+      # 1. App folder (dist/win-unpacked). Fuses are flipped here, before any signing.
+      - name: Build app
+        run: npm run build && npx electron-builder --win dir --x64 --publish never
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
 
@@ -56,9 +63,92 @@ jobs:
           grep -q 'EnableNodeCliInspectArguments is Disabled' fuses.txt
           grep -q 'OnlyLoadAppFromAsar is Enabled' fuses.txt
 
+      # 2. Optional: sign Tasklight.exe through SignPath. Enabled by setting the repository
+      #    variables SIGNPATH_ORGANIZATION_ID / SIGNPATH_PROJECT_SLUG / SIGNPATH_SIGNING_POLICY_SLUG
+      #    and the secret SIGNPATH_API_TOKEN. Each request waits for manual approval in SignPath.
+      - name: Upload app exe for signing
+        id: unsigned-app
+        if: vars.SIGNPATH_ORGANIZATION_ID != ''
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          path: dist/win-unpacked/Tasklight.exe
+          archive: false
+          retention-days: 1
+
+      - name: Sign app exe (SignPath, approve in SignPath)
+        if: vars.SIGNPATH_ORGANIZATION_ID != ''
+        uses: signpath/github-action-submit-signing-request@f6d04783b4569d051e0c80105fe66e82819d0092 # v3.0
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          artifact-configuration-slug: app-exe
+          github-artifact-id: ${{ steps.unsigned-app.outputs.artifact-id }}
+          skip-decompress: true
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 3600
+          output-artifact-directory: signed-app
+
+      - name: Use the signed app exe
+        if: vars.SIGNPATH_ORGANIZATION_ID != ''
+        shell: bash
+        run: cp -f signed-app/*.exe dist/win-unpacked/Tasklight.exe
+
+      # 3. Installer built from exactly that folder; the app exe must come through untouched.
+      - name: Build installer
+        shell: bash
+        run: |
+          sha256sum dist/win-unpacked/Tasklight.exe | cut -d' ' -f1 > app-exe.sha256
+          npx electron-builder --win nsis --x64 --prepackaged dist/win-unpacked --publish never
+          echo "$(cat app-exe.sha256)  dist/win-unpacked/Tasklight.exe" | sha256sum -c -
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+      # 4. Optional: sign the installer the same way.
+      - name: Upload installer for signing
+        id: unsigned-installer
+        if: vars.SIGNPATH_ORGANIZATION_ID != ''
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          path: dist/Tasklight-Setup-*.exe
+          archive: false
+          retention-days: 1
+
+      - name: Sign installer (SignPath, approve in SignPath)
+        if: vars.SIGNPATH_ORGANIZATION_ID != ''
+        uses: signpath/github-action-submit-signing-request@f6d04783b4569d051e0c80105fe66e82819d0092 # v3.0
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          artifact-configuration-slug: installer
+          github-artifact-id: ${{ steps.unsigned-installer.outputs.artifact-id }}
+          skip-decompress: true
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 3600
+          output-artifact-directory: signed-installer
+
+      - name: Use the signed installer
+        if: vars.SIGNPATH_ORGANIZATION_ID != ''
+        shell: bash
+        run: cp -f signed-installer/*.exe dist/
+
+      - name: Verify signatures
+        if: vars.SIGNPATH_ORGANIZATION_ID != ''
+        shell: pwsh
+        run: |
+          foreach ($f in @('dist/win-unpacked/Tasklight.exe', (Get-ChildItem dist/Tasklight-Setup-*.exe).FullName)) {
+            $s = Get-AuthenticodeSignature $f
+            if ($s.Status -ne 'Valid') { throw "$f signature status: $($s.Status)" }
+            Write-Host "$f signed by $($s.SignerCertificate.Subject)"
+          }
+
+      # 5. Install, check the installed exe is the one we built/signed, launch, uninstall.
       - name: Test the installer (per-user, no admin, clean uninstall)
         shell: pwsh
-        run: ./scripts/test-installer.ps1 (Get-ChildItem dist/Tasklight-Setup-*.exe).FullName
+        run: ./scripts/test-installer.ps1 -Setup (Get-ChildItem dist/Tasklight-Setup-*.exe).FullName -ExpectedExeSha256 (Get-Content app-exe.sha256)
 
       - name: Checksums
         shell: bash
@@ -91,11 +181,20 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
+          SIGNED: ${{ vars.SIGNPATH_ORGANIZATION_ID != '' }}
         run: |
           pre=""
           [[ "$TAG" == *-* ]] && pre="--prerelease"
+          policy="https://github.com/$GITHUB_REPOSITORY#code-signing-policy"
+          if [ "$SIGNED" = "true" ]; then
+            signing="Signed via SignPath Foundation ([code signing policy]($policy))."
+          else
+            signing="This build isn't code-signed yet, so SmartScreen asks: More info → Run anyway ([code signing policy]($policy))."
+          fi
           {
-            echo "**Install (Windows):** download \`Tasklight-Setup-${TAG#v}.exe\` and run it. It installs just for you (no admin prompt) into \`%LOCALAPPDATA%\\Programs\\Tasklight\`, adds a Start menu shortcut and starts Tasklight. To upgrade, run the newer setup; your settings and token are kept. Uninstall from Settings → Apps. It isn't code-signed, so SmartScreen asks: More info → Run anyway."
+            echo "**Install (Windows):** download \`Tasklight-Setup-${TAG#v}.exe\` and run it. It installs just for you (no admin prompt) into \`%LOCALAPPDATA%\\Programs\\Tasklight\`, adds a Start menu shortcut and starts Tasklight. To upgrade, run the newer setup; your settings and token are kept. Uninstall from Settings → Apps."
+            echo
+            echo "$signing"
             echo
             echo "Verify the download: \`Get-FileHash Tasklight-Setup-*.exe\` should match \`SHA256SUMS.txt\`."
             echo

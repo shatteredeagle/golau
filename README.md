@@ -79,6 +79,21 @@ Actions are pinned to commit SHAs; the job that can write to the repo runs no pr
 - `src/main/busybar.ts`: BUSY Bar display
 - `src/renderer/src/views/*`: screens; `surfaces.tsx`: nudge card, focus bar, capture box
 
+## Code signing policy
+
+Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org).
+*Status: applying to the SignPath Foundation program; releases are unsigned until it is approved.*
+
+- **What gets signed:** only `Tasklight.exe` and `Tasklight-Setup-<version>.exe`, built by GitHub Actions on GitHub-hosted runners from a version tag in this repository ([release workflow](.github/workflows/release.yml)). Nothing built elsewhere is signed, and third-party files (Electron's DLLs) are shipped as their maintainers published them.
+- **Team roles:** Committers and reviewers: [@shatteredeagle](https://github.com/shatteredeagle). Approvers: [@shatteredeagle](https://github.com/shatteredeagle) (repository owner). Code is written with AI assistance (Claude); every change is reviewed and pushed by the owner, and outside contributions arrive as pull requests reviewed before merging.
+- **Approval:** every signing request is approved by hand in SignPath before it is signed. All team members use multi-factor authentication on GitHub and SignPath.
+
+### Privacy policy
+
+This program will not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it.
+
+In practice: Tasklight talks only to the Azure DevOps organization you configure (to read and update your work items) and, if you turn it on, to the BUSY Bar address you enter on your local network. Links open in your own browser when you click them. There is no telemetry, analytics, crash reporting or auto-update, and the app's interface itself has no network access (see [Security](#security)). Your settings and encrypted token stay on your machine.
+
 ## License
 
 Copyright © 2026 shatteredeagle

@@ -80,8 +80,9 @@ jobs:
       - run: node node_modules/electron/install.js
       - run: npm test
 
-      - name: Package
-        run: npm run build && npx electron-builder --win nsis --x64 --publish never
+      # Same two-stage flow as release.yml (app folder, then installer from it), minus signing.
+      - name: Build app
+        run: npm run build && npx electron-builder --win dir --x64 --publish never
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
 
@@ -94,9 +95,18 @@ jobs:
           grep -q 'EnableNodeCliInspectArguments is Disabled' fuses.txt
           grep -q 'OnlyLoadAppFromAsar is Enabled' fuses.txt
 
+      - name: Build installer
+        shell: bash
+        run: |
+          sha256sum dist/win-unpacked/Tasklight.exe | cut -d' ' -f1 > app-exe.sha256
+          npx electron-builder --win nsis --x64 --prepackaged dist/win-unpacked --publish never
+          echo "$(cat app-exe.sha256)  dist/win-unpacked/Tasklight.exe" | sha256sum -c -
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
       - name: Test the installer (per-user, no admin, clean uninstall)
         shell: pwsh
-        run: ./scripts/test-installer.ps1 (Get-ChildItem dist/Tasklight-Setup-*.exe).FullName
+        run: ./scripts/test-installer.ps1 -Setup (Get-ChildItem dist/Tasklight-Setup-*.exe).FullName -ExpectedExeSha256 (Get-Content app-exe.sha256)
 
       - name: Upload test build
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

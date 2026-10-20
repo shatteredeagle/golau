@@ -1,8 +1,8 @@
 # Installs the per-user setup silently on a Windows runner and checks it behaves:
 # user-profile only (no Program Files, no HKLM), Start menu shortcut, app starts,
 # and uninstall removes the app but keeps the user's settings.
-# Usage: pwsh scripts/test-installer.ps1 dist/Tasklight-Setup-x.y.z.exe
-param([Parameter(Mandatory)][string]$Setup)
+# Usage: pwsh scripts/test-installer.ps1 -Setup dist/Tasklight-Setup-x.y.z.exe [-ExpectedExeSha256 <hash>]
+param([Parameter(Mandatory)][string]$Setup, [string]$ExpectedExeSha256)
 $ErrorActionPreference = 'Stop'
 
 function Fail($msg) { Write-Host "::error::$msg"; exit 1 }
@@ -22,6 +22,11 @@ if ($p.ExitCode -ne 0) { Fail "installer exit code $($p.ExitCode)" }
 
 if (-not (Test-Path $exe)) { Fail "Tasklight.exe not found in $installDir" }
 Write-Host "OK installed to $installDir"
+if ($ExpectedExeSha256) {
+  $got = (Get-FileHash $exe -Algorithm SHA256).Hash.ToLower()
+  if ($got -ne $ExpectedExeSha256.Trim().ToLower()) { Fail "installed Tasklight.exe hash $got != built $ExpectedExeSha256" }
+  Write-Host 'OK installed Tasklight.exe is byte-identical to the built (and, if enabled, signed) one'
+}
 
 foreach ($pf in @($env:ProgramFiles, ${env:ProgramFiles(x86)})) {
   if ($pf -and (Test-Path (Join-Path $pf 'Tasklight'))) { Fail "found an install under $pf" }
