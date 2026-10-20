@@ -16,6 +16,7 @@ import { StaleModal } from './views/StaleModal'
 import { Inbox } from './views/Inbox'
 import { SettingsView } from './views/Settings'
 import { Setup } from './views/Setup'
+import { RequiredFieldsModal, type Fixup } from './views/RequiredFieldsModal'
 import icon from './assets/icon.png'
 
 type Page = 'today' | 'work' | 'search' | 'inbox' | 'settings'
@@ -41,6 +42,7 @@ export function App(): ReactNode {
   const [overlay, setOverlay] = useState<Overlay>(null)
   const [toasts, setToasts] = useState<Toast[]>([])
   const [conn, setConn] = useState('')
+  const [fixup, setFixup] = useState<Fixup | null>(null)
 
   const connected = !!settings?.hasPat && !!settings.orgUrl && !!settings.project
 
@@ -77,6 +79,21 @@ export function App(): ReactNode {
     void call('startupNotices').then((n) => n.forEach((m) => toast(m)))
   }, [toast])
 
+  const updateItem = useCallback<Ctx['updateItem']>(
+    async (item, fields) => {
+      try {
+        const r = await call('updateItem', item.id, fields)
+        if (r.ok) return r.value
+        if (r.fieldErrors.some((f) => f.field)) return await new Promise((resolve) => setFixup({ item, fields, errors: r.fieldErrors, resolve }))
+        toast(r.message, { error: true })
+      } catch (e) {
+        toast((e as Error).message, { error: true })
+      }
+      return null
+    },
+    [toast]
+  )
+
   const go = useCallback((r: Route) => {
     if (r.view === 'item') setItem(r.id)
     else if (r.view === 'create') setOverlay({ kind: 'create', route: r })
@@ -110,9 +127,9 @@ export function App(): ReactNode {
   const ctx = useMemo<Ctx | null>(
     () =>
       state && settings
-        ? { state, settings, work, workError, refreshWork: refresh, types, go, openItem: setItem, toast }
+        ? { state, settings, work, workError, refreshWork: refresh, types, go, openItem: setItem, toast, updateItem }
         : null,
-    [state, settings, work, workError, refresh, types, go, toast]
+    [state, settings, work, workError, refresh, types, go, toast, updateItem]
   )
 
   if (!ctx || !settings) return null
@@ -166,6 +183,7 @@ export function App(): ReactNode {
       {overlay?.kind === 'eod' && <EodModal onClose={() => setOverlay(null)} />}
       {overlay?.kind === 'stale' && <StaleModal onClose={() => setOverlay(null)} />}
       {overlay?.kind === 'create' && <CreateModal route={overlay.route} onClose={() => setOverlay(null)} />}
+      {fixup && <RequiredFieldsModal key={fixup.item.id} fixup={fixup} onDone={() => setFixup(null)} />}
       <div className="toasts">
         {toasts.map((t) => (
           <div key={t.id} className={`toast ${t.error ? 'error' : ''}`}>

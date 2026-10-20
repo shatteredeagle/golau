@@ -17,9 +17,77 @@ const STATES = [
   { name: 'Closed', color: '339933', category: 'Completed' },
   { name: 'Removed', color: 'ffffff', category: 'Removed' }
 ]
+const SCRUM_STATES = [
+  { name: 'New', color: 'b2b2b2', category: 'Proposed' },
+  { name: 'Approved', color: '5688e0', category: 'Proposed' },
+  { name: 'Committed', color: '007acc', category: 'InProgress' },
+  { name: 'Done', color: '339933', category: 'Completed' },
+  { name: 'Removed', color: 'ffffff', category: 'Removed' }
+]
 const TYPES = [
-  ['Epic', 'FF7B00'], ['Feature', '773B93'], ['User Story', '009CCC'], ['Task', 'F2CB1D'], ['Bug', 'CC293D']
-].map(([name, color]) => ({ name, color, isDisabled: false, states: name === 'Task' ? STATES.filter((s) => s.name !== 'Resolved') : STATES }))
+  ['Epic', 'FF7B00'], ['Feature', '773B93'], ['User Story', '009CCC'], ['Product Backlog Item', '009CCC'], ['Task', 'F2CB1D'], ['Bug', 'CC293D']
+].map(([name, color]) => ({
+  name,
+  color,
+  isDisabled: false,
+  states: name === 'Product Backlog Item' ? SCRUM_STATES : name === 'Task' ? STATES.filter((s) => s.name !== 'Resolved') : STATES
+}))
+
+// Field definitions (subset) and per-type rules, like a customised process would have.
+const FIELDS = [
+  ['System.Title', 'Title', 'string'], ['System.Description', 'Description', 'html'], ['System.State', 'State', 'string'],
+  ['System.AssignedTo', 'Assigned To', 'identity'], ['System.AreaPath', 'Area Path', 'treePath'], ['System.IterationPath', 'Iteration Path', 'treePath'],
+  ['System.Tags', 'Tags', 'plainText'], ['Microsoft.VSTS.Common.Priority', 'Priority', 'integer'],
+  ['Microsoft.VSTS.Common.AcceptanceCriteria', 'Acceptance Criteria', 'html'], ['Microsoft.VSTS.Scheduling.Effort', 'Effort', 'double'],
+  ['Microsoft.VSTS.Common.ValueArea', 'Value Area', 'string'], ['Microsoft.VSTS.Scheduling.RemainingWork', 'Remaining Work', 'double'],
+  ['Custom.Customer', 'Customer', 'picklistString'], ['System.Id', 'ID', 'integer'], ['System.CreatedBy', 'Created By', 'identity']
+].map(([referenceName, name, type]) => ({ referenceName, name, type, readOnly: referenceName === 'System.Id' || referenceName === 'System.CreatedBy' }))
+
+function typeFields(type) {
+  const f = (ref, extra = {}) => ({ ...FIELDS.find((x) => x.referenceName === ref), alwaysRequired: false, ...extra })
+  const list = [
+    f('System.Title', { alwaysRequired: true }), f('System.Description'), f('System.State', { alwaysRequired: true, defaultValue: 'New' }),
+    f('System.AssignedTo'), f('System.AreaPath', { alwaysRequired: true, defaultValue: 'Platform' }), f('System.IterationPath', { alwaysRequired: true, defaultValue: 'Platform' }),
+    f('System.Tags'), f('Microsoft.VSTS.Common.Priority', { allowedValues: [1, 2, 3, 4], defaultValue: 2 }), f('System.Id'), f('System.CreatedBy')
+  ]
+  if (type === 'Product Backlog Item') {
+    list.find((x) => x.referenceName === 'System.Description').alwaysRequired = true
+    list.push(
+      f('Microsoft.VSTS.Common.AcceptanceCriteria'),
+      f('Microsoft.VSTS.Scheduling.Effort'),
+      f('Microsoft.VSTS.Common.ValueArea', { alwaysRequired: true, defaultValue: 'Business', allowedValues: ['Architectural', 'Business'] }),
+      f('Custom.Customer', { alwaysRequired: true, allowedValues: ['Contoso', 'Fabrikam', 'Internal'], helpText: 'Who asked for this?' })
+    )
+  }
+  if (type === 'Task') list.push(f('Microsoft.VSTS.Scheduling.RemainingWork'))
+  return list
+}
+
+/** Rules ADO would enforce; returns rule errors for an item after a change. */
+function ruleErrors(it) {
+  const errs = []
+  const type = it.fields['System.WorkItemType']
+  for (const fd of typeFields(type)) {
+    if (!fd.alwaysRequired || fd.defaultValue !== undefined) continue
+    const v = it.fields[fd.referenceName]
+    if (v === undefined || v === null || String(v).replace(/<[^>]*>/g, '').trim() === '') errs.push({ fd, flags: 'required, invalidEmpty' })
+  }
+  // conditional rule: committing a PBI needs an effort estimate
+  if (type === 'Product Backlog Item' && it.fields['System.State'] === 'Committed' && !it.fields['Microsoft.VSTS.Scheduling.Effort'])
+    errs.push({ fd: FIELDS.find((x) => x.referenceName === 'Microsoft.VSTS.Scheduling.Effort'), flags: 'required, invalidEmpty' })
+  return errs
+}
+
+function ruleErrorResponse(res, errs, withCustomProperties) {
+  const msg = errs.map((e) => `TF401320: Rule Error for field ${e.fd.name}. Error code: Required, InvalidEmpty.`).join(' ')
+  return json(res, 400, {
+    message: msg,
+    typeKey: 'RuleValidationException',
+    ...(withCustomProperties
+      ? { customProperties: { RuleValidationErrors: errs.map((e) => ({ fieldReferenceName: e.fd.referenceName, fieldStatusFlags: e.flags, errorMessage: `TF401320: Rule Error for field ${e.fd.name}. Error code: Required, InvalidEmpty.` })) } }
+      : {})
+  })
+}
 
 const day = 864e5
 const iso = (daysAgo) => new Date(Date.now() - daysAgo * day).toISOString()
@@ -73,6 +141,8 @@ add('Bug', 'Hostile description test', 'New', { assigned: null, changed: 30, des
   '<iframe src="https://evil.example"></iframe><svg onload="alert(1)"></svg><form action="https://evil.example"><input name=a></form>' })
 add('Task', 'Write runbook for cert rotation', 'New', { changed: 8, remaining: 3 })
 add('Bug', 'Dashboard tiles flicker on resize', 'Resolved', { changed: 1 })
+// Scrum-style item: moving it to Committed needs an Effort (conditional rule)
+add('Product Backlog Item', 'Bulk export of audit events', 'Approved', { changed: 1, tags: 'reporting' })
 // worst case for card layout: long unbroken words and a long state name
 add('User Story', 'Migrate PartnerPortal.Authentication.OpenIdConnectHandlerConfiguration to the new tenant-wide settings service', 'Waiting for Code Review', { changed: 2, tags: 'auth; tech-debt' })
 add('Task', 'Update pipeline to Node 24', 'Closed', { changed: 0 })
@@ -161,6 +231,8 @@ http
       if (key === 'projects') return json(res, 200, { value: [{ name: 'Platform' }, { name: 'Billing' }] })
       if (api[0] === 'projects' && api[2] === 'teams') return json(res, 200, { value: [{ name: `${api[1]} Team` }, { name: 'Ops' }] })
       if (key === 'wit/workitemtypes') return json(res, 200, { value: TYPES })
+      if (key === 'wit/fields') return json(res, 200, { value: FIELDS })
+      if (api[0] === 'wit' && api[1] === 'workitemtypes' && api[3] === 'fields') return json(res, 200, { value: typeFields(api[2]) })
       if (key === 'wit/wiql' && req.method === 'POST') {
         const { query } = await body(req)
         const top = Number(url.searchParams.get('$top') ?? 200)
@@ -187,6 +259,12 @@ http
         const it = items.get(id)
         it.fields['System.Description'] = ''
         applyPatch(it, ops)
+        const errs = ruleErrors(it)
+        if (errs.length) {
+          items.delete(id)
+          nextId--
+          return ruleErrorResponse(res, errs, true)
+        }
         return json(res, 200, { id })
       }
       if (api[0] === 'wit' && api[1].toLowerCase() === 'workitems' && api[3] === 'comments') {
@@ -203,7 +281,14 @@ http
       if (api[0] === 'wit' && api[1].toLowerCase() === 'workitems' && api[2]) {
         const it = items.get(Number(api[2]))
         if (!it) return json(res, 404, { message: `TF401232: Work item ${api[2]} does not exist.` })
-        if (req.method === 'PATCH') applyPatch(it, await body(req))
+        if (req.method === 'PATCH') {
+          const trial = structuredClone(it)
+          applyPatch(trial, await body(req))
+          const errs = ruleErrors(trial)
+          // message-only error (no customProperties) to exercise the app's fallback parser
+          if (errs.length) return ruleErrorResponse(res, errs, false)
+          Object.assign(it, trial)
+        }
         return json(res, 200, it)
       }
       if (key === 'work/teamsettings/iterations')

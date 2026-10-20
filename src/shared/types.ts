@@ -64,7 +64,36 @@ export interface CreateItemInput {
   tags?: string[]
   remainingWork?: number
   startFocus?: boolean
+  /** any other fields (reference name → value), e.g. ones the process marks required */
+  fields?: Record<string, unknown>
 }
+
+export type FieldKind = 'string' | 'html' | 'plainText' | 'integer' | 'double' | 'dateTime' | 'boolean' | 'identity' | 'treePath' | 'other'
+
+/** A field of a work item type, as the process defines it. */
+export interface FieldSpec {
+  referenceName: string
+  name: string
+  kind: FieldKind
+  alwaysRequired: boolean
+  readOnly: boolean
+  defaultValue?: unknown
+  allowedValues?: string[]
+  helpText?: string
+}
+
+/** A rule Azure DevOps rejected, tied to a field when we can tell which. */
+export interface FieldError {
+  referenceName?: string
+  name: string
+  message: string
+  /** empty-but-required (vs. an invalid value) */
+  required: boolean
+  field?: FieldSpec
+}
+
+/** Result of a create/update across IPC (Errors lose their extra properties there). */
+export type Mutation<T> = { ok: true; value: T } | { ok: false; message: string; fieldErrors: FieldError[] }
 
 export interface BusyBarSettings {
   enabled: boolean

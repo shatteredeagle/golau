@@ -8,7 +8,7 @@ import { Modal, ModalHead, StatePill, TypeChip, useApp } from '../components'
 
 /** One-click triage for cards that haven't moved: still on it / back to to-do / done. */
 export function StaleModal({ onClose }: { onClose: () => void }): ReactNode {
-  const { work, settings, types, toast, openItem } = useApp()
+  const { work, settings, types, toast, openItem, updateItem } = useApp()
   const [handled, setHandled] = useState<Record<number, string>>({})
   const stale = staleItems(work ?? [], settings.staleDays)
   // keep handled ones visible so the list doesn't jump around
@@ -28,8 +28,7 @@ export function StaleModal({ onClose }: { onClose: () => void }): ReactNode {
       } else {
         const target = t?.states.find((s) => s.category === (kind === 'todo' ? 'Proposed' : 'Completed'))
         if (!target) throw new Error(`No ${kind} state for ${item.type}`)
-        await call('updateItem', item.id, { 'System.State': target.name })
-        setHandled((h) => ({ ...h, [item.id]: target.name }))
+        if (await updateItem(item, { 'System.State': target.name })) setHandled((h) => ({ ...h, [item.id]: target.name }))
       }
     } catch (e) {
       toast((e as Error).message, { error: true })

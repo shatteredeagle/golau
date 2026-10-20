@@ -2,7 +2,6 @@ import { useMemo, useState, type ReactNode } from 'react'
 import { RefreshCw } from 'lucide-react'
 import type { WorkItem } from '@shared/types'
 import { ago, fmtDur, todayTotals } from '@shared/time'
-import { call } from '../api'
 import { FocusButton, StaleBadge, TypeChip, bucket, useApp } from '../components'
 
 const COLS = [
@@ -87,7 +86,7 @@ export function Board(): ReactNode {
 }
 
 function Tile({ item, todayMs }: { item: WorkItem; todayMs?: number }): ReactNode {
-  const { state, types, openItem, toast } = useApp()
+  const { state, types, openItem, toast, updateItem } = useApp()
   const t = types.find((x) => x.name === item.type)
   return (
     <div className={`tile ${state.focus?.itemId === item.id ? 'focused' : ''}`} onClick={() => openItem(item.id)}>
@@ -103,11 +102,7 @@ function Tile({ item, todayMs }: { item: WorkItem; todayMs?: number }): ReactNod
           <select
             className="select inline"
             value={item.state}
-            onChange={(e) =>
-              void call('updateItem', item.id, { 'System.State': e.target.value })
-                .then((x) => toast(`#${x.id} → ${x.state}`))
-                .catch((er: Error) => toast(er.message, { error: true }))
-            }
+            onChange={(e) => void updateItem(item, { 'System.State': e.target.value }).then((x) => x && toast(`#${x.id} → ${x.state}`))}
           >
             {t.states.map((s) => (
               <option key={s.name}>{s.name}</option>

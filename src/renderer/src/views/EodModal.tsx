@@ -117,7 +117,7 @@ export function EodModal({ onClose }: { onClose: () => void }): ReactNode {
 }
 
 function CardStep({ item, todayMs, planned, onDone }: { item: WorkItem; todayMs: number; planned: boolean; onDone: (saved: boolean) => void }): ReactNode {
-  const { types, state, settings, toast } = useApp()
+  const { types, state, settings, toast, updateItem } = useApp()
   const t = types.find((x) => x.name === item.type)
   const [st, setSt] = useState(item.state)
   const [update, setUpdate] = useState('')
@@ -135,7 +135,8 @@ function CardStep({ item, todayMs, planned, onDone }: { item: WorkItem; todayMs:
       if (logHours && item.completedWork != null) fields['Microsoft.VSTS.Scheduling.CompletedWork'] = Math.round((item.completedWork + hours) * 100) / 100
       if (item.remainingWork != null && remaining !== '' && Number(remaining) !== item.remainingWork)
         fields['Microsoft.VSTS.Scheduling.RemainingWork'] = Number(remaining)
-      if (Object.keys(fields).length) await call('updateItem', item.id, fields)
+      // a cancelled "needs more fields" prompt keeps you on this card instead of moving on
+      if (Object.keys(fields).length && !(await updateItem(item, fields))) return
       if (update.trim()) await call('addComment', item.id, update.trim(), item.project)
       if (note !== (state.notes[item.id]?.text ?? '')) await call('setNote', item.id, note)
       onDone(Object.keys(fields).length > 0 || !!update.trim())

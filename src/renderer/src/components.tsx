@@ -17,6 +17,8 @@ export interface Ctx {
   go: (r: Route) => void
   openItem: (id: number) => void
   toast: (msg: string, opts?: { action?: { label: string; run: () => void }; error?: boolean }) => void
+  /** Update a card; if Azure DevOps wants more fields it asks for them. Resolves null if cancelled/failed. */
+  updateItem: (item: { id: number; title: string }, fields: Record<string, unknown>) => Promise<WorkItem | null>
 }
 
 export const AppCtx = createContext<Ctx>(null as unknown as Ctx)
@@ -126,7 +128,7 @@ export function FocusButton({ item, big }: { item: WorkItem; big?: boolean }): R
  * first in-progress state, since starting work and updating the card should be one motion.
  */
 export function useStartFocus(): (item: WorkItem) => Promise<void> {
-  const { types, toast } = useApp()
+  const { types, toast, updateItem } = useApp()
   return async (item: WorkItem) => {
     await call('focusItem', item.id)
     if (item.category === 'Proposed') {
@@ -136,9 +138,7 @@ export function useStartFocus(): (item: WorkItem) => Promise<void> {
           action: {
             label: `Move to ${next.name}`,
             run: () =>
-              void call('updateItem', item.id, { 'System.State': next.name })
-                .then(() => toast(`#${item.id} is ${next.name}`))
-                .catch((e: Error) => toast(e.message, { error: true }))
+              void updateItem(item, { 'System.State': next.name }).then((w) => w && toast(`#${item.id} is ${next.name}`))
           }
         })
     }

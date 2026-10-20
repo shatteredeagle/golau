@@ -1,6 +1,9 @@
 import type {
   Comment,
   CreateItemInput,
+  FieldError,
+  FieldKind,
+  FieldSpec,
   Person,
   SearchQuery,
   StateCategory,
@@ -36,10 +39,50 @@ const EXTRA_FIELDS = [
 
 export class AdoError extends Error {
   status: number
-  constructor(message: string, status: number) {
+  /** parsed JSON error body from Azure DevOps, when there was one */
+  body?: unknown
+  constructor(message: string, status: number, body?: unknown) {
     super(message)
     this.status = status
+    this.body = body
   }
+}
+
+/**
+ * Turn an Azure DevOps rule failure into per-field errors. ADO reports them either as
+ * customProperties.RuleValidationErrors[] or only in the message:
+ *   "TF401320: Rule Error for field Description. Error code: Required, InvalidEmpty."
+ */
+export function parseRuleErrors(message: string, body?: unknown): FieldError[] {
+  const b = body as { customProperties?: { RuleValidationErrors?: unknown } } | undefined
+  const list = b?.customProperties?.RuleValidationErrors
+  // "InvalidEmpty" = required and blank; "Required" alone (no invalid-value flag) means the same
+  const isRequired = (flags: string): boolean =>
+    /invalidEmpty/i.test(flags) || (/required/i.test(flags) && !/invalid(ListValue|Value|Format|Type)/i.test(flags))
+  if (Array.isArray(list) && list.length) {
+    return list.map((e: { fieldReferenceName?: string; fieldStatusFlags?: string; errorMessage?: string }) => {
+      const flags = e.fieldStatusFlags ?? ''
+      const named = /Rule Error for field ([^.]+)\./.exec(e.errorMessage ?? '')
+      return {
+        referenceName: e.fieldReferenceName,
+        name: named?.[1].trim() ?? e.fieldReferenceName ?? 'field',
+        message: e.errorMessage ?? message,
+        required: isRequired(flags) || /required|cannot be empty/i.test(e.errorMessage ?? '')
+      }
+    })
+  }
+  const out: FieldError[] = []
+  const re = /Rule Error for field ([^.]+)\.\s*Error code:\s*([^.]+)\./g
+  for (let m = re.exec(message); m; m = re.exec(message)) {
+    out.push({ name: m[1].trim(), message: `${m[1].trim()}: ${m[2].trim()}`, required: isRequired(m[2]) })
+  }
+  return out
+}
+
+const KIND: Record<string, FieldKind> = {
+  string: 'string', picklistString: 'string', html: 'html', plainText: 'plainText',
+  integer: 'integer', picklistInteger: 'integer', double: 'double', picklistDouble: 'double',
+  dateTime: 'dateTime', boolean: 'boolean', identity: 'identity', treePath: 'treePath'
 }
 
 export interface AdoConfig {
@@ -92,6 +135,8 @@ const assertField = (name: string): string => {
 export class AdoClient {
   private me?: Person
   private types = new Map<string, TypeInfo[]>() // by project
+  private fieldKinds = new Map<string, Map<string, { kind: FieldKind; readOnly: boolean; name: string }>>() // by project
+  private typeFieldCache = new Map<string, FieldSpec[]>() // project|type
   private extraFieldsOk = true
   private cfg: AdoConfig
 
@@ -131,13 +176,15 @@ export class AdoClient {
     }
     if (!res.ok) {
       let msg = `${res.status} ${res.statusText}`
+      let body: unknown
       try {
-        msg = JSON.parse(text).message ?? msg
+        body = JSON.parse(text)
+        msg = (body as { message?: string }).message ?? msg
       } catch {
         /* keep status text */
       }
       if (res.status === 401) msg = 'Azure DevOps rejected the token (expired or wrong scope?)'
-      throw new AdoError(msg, res.status)
+      throw new AdoError(msg, res.status, body)
     }
     return (text ? JSON.parse(text) : undefined) as T
   }
@@ -429,6 +476,58 @@ export class AdoClient {
     return data.value[0]?.path
   }
 
+  private async allFields(project = this.cfg.project): Promise<Map<string, { kind: FieldKind; readOnly: boolean; name: string }>> {
+    const cached = this.fieldKinds.get(project)
+    if (cached) return cached
+    const data = await this.req<{ value: { referenceName: string; name: string; type: string; readOnly?: boolean }[] }>(
+      `${this.projectUrl(project)}/_apis/wit/fields?${API}`
+    )
+    const map = new Map(data.value.map((f) => [f.referenceName, { kind: KIND[f.type] ?? 'other', readOnly: !!f.readOnly, name: f.name }]))
+    this.fieldKinds.set(project, map)
+    return map
+  }
+
+  /** Fields of a work item type with required flags, defaults and allowed values. */
+  async typeFields(type: string, project = this.cfg.project): Promise<FieldSpec[]> {
+    const key = `${project}|${type}`
+    const cached = this.typeFieldCache.get(key)
+    if (cached) return cached
+    const [kinds, data] = await Promise.all([
+      this.allFields(project),
+      this.req<{
+        value: { referenceName: string; name: string; alwaysRequired?: boolean; defaultValue?: unknown; allowedValues?: unknown[]; helpText?: string }[]
+      }>(`${this.projectUrl(project)}/_apis/wit/workitemtypes/${encodeURIComponent(type)}/fields?$expand=allowedValues&${API}`)
+    ])
+    const specs: FieldSpec[] = data.value.map((f) => {
+      const k = kinds.get(f.referenceName)
+      return {
+        referenceName: f.referenceName,
+        name: f.name,
+        kind: k?.kind ?? 'other',
+        alwaysRequired: !!f.alwaysRequired,
+        readOnly: k?.readOnly ?? false,
+        defaultValue: f.defaultValue ?? undefined,
+        allowedValues: f.allowedValues?.length ? f.allowedValues.map(String) : undefined,
+        helpText: f.helpText || undefined
+      }
+    })
+    this.typeFieldCache.set(key, specs)
+    return specs
+  }
+
+  /** Map rule errors onto field specs so the UI can show the right input. */
+  async explainRuleErrors(e: AdoError, type: string, project = this.cfg.project): Promise<FieldError[]> {
+    const errors = parseRuleErrors(e.message, e.body)
+    if (!errors.length) return []
+    const specs = await this.typeFields(type, project).catch(() => [] as FieldSpec[])
+    return errors.map((fe) => {
+      const field =
+        specs.find((s) => fe.referenceName && s.referenceName.toLowerCase() === fe.referenceName.toLowerCase()) ??
+        specs.find((s) => s.name.toLowerCase() === fe.name.toLowerCase())
+      return { ...fe, referenceName: field?.referenceName ?? fe.referenceName, name: field?.name ?? fe.name, field }
+    })
+  }
+
   async createItem(input: CreateItemInput): Promise<WorkItem> {
     const ops: unknown[] = [{ op: 'add', path: '/fields/System.Title', value: input.title }]
     if (input.description) ops.push({ op: 'add', path: '/fields/System.Description', value: input.description })
@@ -443,6 +542,10 @@ export class AdoClient {
     if (input.tags?.length) ops.push({ op: 'add', path: '/fields/System.Tags', value: input.tags.join('; ') })
     if (input.remainingWork != null)
       ops.push({ op: 'add', path: '/fields/Microsoft.VSTS.Scheduling.RemainingWork', value: input.remainingWork })
+    for (const [k, v] of Object.entries(input.fields ?? {})) {
+      if (v === undefined || v === null || v === '') continue
+      ops.push({ op: 'add', path: `/fields/${assertField(k)}`, value: v })
+    }
     if (input.parentId) assertId(input.parentId)
     if (input.parentId)
       ops.push({

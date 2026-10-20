@@ -11,7 +11,7 @@ import { Tracker } from './tracker'
 import { createCapture, createMain, createMini, createNudge, isAppUrl, openLink, placeNudge } from './windows'
 import { runShots } from './shots'
 import { fmtDur } from '../shared/time'
-import type { CreateItemInput, Nudge, Route, SearchQuery, Settings, WorkItem } from '../shared/types'
+import type { CreateItemInput, Mutation, Nudge, Route, SearchQuery, Settings, WorkItem } from '../shared/types'
 
 if (!app.requestSingleInstanceLock()) {
   app.quit()
@@ -145,6 +145,31 @@ async function suggestCards(text: string): Promise<{ id: number; title: string; 
     .sort((a, b) => b.score - a.score)
     .slice(0, 4)
     .map(({ item }) => ({ id: item.id, title: item.title, type: item.type }))
+}
+
+/** Plain text typed into an HTML field (Description, Acceptance Criteria…) becomes safe HTML. */
+async function normalizeFields(type: string, project: string | undefined, fields: Record<string, unknown>): Promise<Record<string, unknown>> {
+  const specs = await client().typeFields(type, project).catch(() => [])
+  const out: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(fields)) {
+    const spec = specs.find((s) => s.referenceName === k)
+    out[k] = spec?.kind === 'html' && typeof v === 'string' && !v.trimStart().startsWith('<') ? toHtml(v) : v
+  }
+  return out
+}
+
+/** Rule failures (required/invalid fields) come back as data the UI can act on; anything else still throws. */
+async function asMutationError(e: unknown, type: string | undefined, project?: string): Promise<Mutation<never>> {
+  if (e instanceof AdoError && e.status === 400 && type) {
+    const fieldErrors = await client().explainRuleErrors(e, type, project)
+    if (fieldErrors.length) {
+      const names = fieldErrors.map((f) => f.name).join(', ')
+      const required = fieldErrors.every((f) => f.required)
+      return { ok: false, message: required ? `Azure DevOps needs: ${names}` : `Azure DevOps rejected: ${names}`, fieldErrors }
+    }
+    return { ok: false, message: e.message, fieldErrors: [] }
+  }
+  throw e
 }
 
 const toHtml = (text: string): string =>
@@ -416,31 +441,42 @@ const api = {
     await guarded(() => client().addComment(id, toHtml(text), project))
     tracker.addWin({ itemId: id, title: tracker.s.titles[id]?.title ?? `#${id}`, kind: 'commented' })
   },
-  updateItem: async (id: number, fields: Record<string, unknown>) => {
-    const before = workCache.find((x) => x.id === id)
-    const item = await guarded(() => client().updateItem(id, fields))
-    touchCache(item)
-    if (item.category === 'Completed' && before?.category !== 'Completed') {
-      tracker.addWin({ itemId: id, title: item.title, kind: 'closed' })
-      if (tracker.s.focus?.itemId === id) tracker.stop()
-    } else tracker.addWin({ itemId: id, title: item.title, kind: 'updated' })
-    return item
+  updateItem: async (id: number, fields: Record<string, unknown>): Promise<Mutation<WorkItem>> => {
+    const before = workCache.find((x) => x.id === id) ?? (await guarded(() => client().getItem(id)))
+    try {
+      const item = await guarded(async () => client().updateItem(id, await normalizeFields(before.type, before.project, fields)))
+      touchCache(item)
+      if (item.category === 'Completed' && before.category !== 'Completed') {
+        tracker.addWin({ itemId: id, title: item.title, kind: 'closed' })
+        if (tracker.s.focus?.itemId === id) tracker.stop()
+      } else tracker.addWin({ itemId: id, title: item.title, kind: 'updated' })
+      return { ok: true, value: item }
+    } catch (e) {
+      return asMutationError(e, before.type, before.project)
+    }
   },
+  typeFields: (type: string, project?: string) => guarded(() => client().typeFields(type, project)),
   assignToMe: async (id: number) => {
     const item = await guarded(() => client().assignToMe(id))
     touchCache(item)
     void myWork(true).catch(() => undefined)
     return item
   },
-  createItem: async (input: CreateItemInput & { fromUnplanned?: string; fromInbox?: string }) => {
-    const item = await guarded(() => client().createItem({ ...input, description: input.description ? toHtml(input.description) : undefined }))
+  createItem: async (input: CreateItemInput & { fromUnplanned?: string; fromInbox?: string }): Promise<Mutation<WorkItem>> => {
+    let item: WorkItem
+    try {
+      const fields = input.fields ? await normalizeFields(input.type, undefined, input.fields) : undefined
+      item = await guarded(() => client().createItem({ ...input, fields, description: input.description ? toHtml(input.description) : undefined }))
+    } catch (e) {
+      return asMutationError(e, input.type)
+    }
     tracker.cacheTitle(item.id, item.title, item.type, item.state)
     tracker.addWin({ itemId: item.id, title: item.title, kind: 'created' })
     if (input.fromUnplanned) tracker.resolveUnplanned(input.fromUnplanned, 'created', item)
     if (input.fromInbox) tracker.resolveInbox(input.fromInbox, 'card', item.id)
     if (input.startFocus && !input.fromUnplanned) tracker.startItem(item)
     void myWork(true).catch(() => undefined)
-    return item
+    return { ok: true, value: item }
   },
   types: () => guarded(() => client().getTypes()),
   openExternal: (url: string) => openLink(url),

@@ -6,7 +6,7 @@ import { call } from '../api'
 import { FocusButton, Html, StaleBadge, TypeChip, useApp } from '../components'
 
 export function ItemDrawer({ id, onClose }: { id: number; onClose: () => void }): ReactNode {
-  const { types, state, toast, go, openItem } = useApp()
+  const { types, state, toast, go, openItem, updateItem } = useApp()
   const [item, setItem] = useState<WorkItem | null>(null)
   const [comments, setComments] = useState<Comment[] | null>(null)
   const [me, setMe] = useState<string>('')
@@ -35,13 +35,10 @@ export function ItemDrawer({ id, onClose }: { id: number; onClose: () => void })
   }, [id])
 
   const save = async (fields: Record<string, unknown>, msg?: string): Promise<void> => {
-    try {
-      const it = await call('updateItem', id, fields)
-      setItem({ ...it, description: item?.description, acceptanceCriteria: item?.acceptanceCriteria })
-      if (msg) toast(msg)
-    } catch (e) {
-      toast((e as Error).message, { error: true })
-    }
+    const it = await updateItem({ id, title: item?.title ?? `#${id}` }, fields)
+    if (!it) return
+    setItem({ ...it, description: item?.description, acceptanceCriteria: item?.acceptanceCriteria })
+    if (msg) toast(msg)
   }
 
   const post = async (): Promise<void> => {

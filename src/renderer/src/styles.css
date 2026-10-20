@@ -1080,3 +1080,20 @@ label.check input {
   font-size: 18px;
   padding: 6px 2px;
 }
+
+/* ---------- required fields ---------- */
+
+.req {
+  color: var(--red);
+  font-weight: 600;
+}
+.field-error {
+  color: var(--red);
+  font-size: 12px;
+}
+.input.invalid,
+.select.invalid,
+.textarea.invalid {
+  border-color: var(--red);
+  box-shadow: 0 0 0 3px var(--red-soft);
+}

@@ -87,6 +87,24 @@ export async function runShots(d: ShotDeps, dir: string): Promise<void> {
 
   await route({ view: 'work' })
   await snap(d.main(), '03-board')
+
+  // moving the PBI to Committed hits the mock's "Effort required" rule → the fields prompt
+  await d.main()?.webContents.executeJavaScript(`(() => {
+    const sel = [...document.querySelectorAll('.tile select')].find((s) => [...s.options].some((o) => o.value === 'Committed'))
+    if (!sel) return false
+    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(sel, 'Committed')
+    sel.dispatchEvent(new Event('change', { bubbles: true }))
+    return true
+  })()`)
+  await wait(1500)
+  const prompt = await d.main()?.webContents.executeJavaScript(`document.querySelector('.modal h2')?.textContent ?? ''`)
+  console.log('needs-fields-prompt', JSON.stringify(prompt))
+  if (!/needs a bit more/.test(String(prompt))) {
+    console.error('FIELDS CHECK FAILED: no required-fields prompt after a rule error')
+    failed = true
+  }
+  await snap(d.main(), '03b-needs-fields')
+  await esc()
   await route({ view: 'search' })
   await snap(d.main(), '04-search')
   await route({ view: 'item', id: 4105 })
@@ -134,6 +152,20 @@ export async function runShots(d: ShotDeps, dir: string): Promise<void> {
   await esc()
   await route({ view: 'create', prefill: { title: 'Helped Sam debug the staging deploy' }, fromUnplanned: uId })
   await snap(d.main(), '09-create')
+  await esc()
+
+  // a type whose process requires Description + Customer: the form shows them and blocks an empty submit
+  await route({ view: 'create', prefill: { type: 'Product Backlog Item', title: 'Export audit events as CSV' } })
+  await wait(1200)
+  await d.main()?.webContents.executeJavaScript(`document.querySelector('.modal form .btn.primary')?.click()`)
+  await wait(600)
+  const marked = await d.main()?.webContents.executeJavaScript(`document.querySelectorAll('.modal .field-error').length`)
+  console.log('create-required-errors', marked)
+  if (!(Number(marked) >= 2)) {
+    console.error('FIELDS CHECK FAILED: create form did not flag required fields')
+    failed = true
+  }
+  await snap(d.main(), '09b-create-required')
   await esc()
   await route({ view: 'stale' })
   await snap(d.main(), '10-stale')

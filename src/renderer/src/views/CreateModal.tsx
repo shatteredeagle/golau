@@ -1,11 +1,13 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Loader2, X } from 'lucide-react'
-import type { Route } from '@shared/types'
+import type { FieldSpec, Route } from '@shared/types'
 import { call } from '../api'
 import { Modal, ModalHead, TypeChip, useApp, useAutoFocus } from '../components'
+import { coerceField, FieldRow, isBlank, requiredExtraFields, type FieldValue } from '../fields'
 import { PickModal } from './PickModal'
 
 const PREFERRED = ['Task', 'Bug', 'User Story', 'Product Backlog Item', 'Issue', 'Feature', 'Epic']
+const DESCRIPTION = 'System.Description'
 
 export function CreateModal({ route, onClose }: { route: Extract<Route, { view: 'create' }>; onClose: () => void }): ReactNode {
   const { types, settings, state, toast, openItem } = useApp()
@@ -30,15 +32,54 @@ export function CreateModal({ route, onClose }: { route: Extract<Route, { view: 
   const [pickingParent, setPickingParent] = useState(false)
   const titleRef = useAutoFocus<HTMLInputElement>()
 
+  // What this type's process requires, plus anything Azure DevOps rejected on a previous try.
+  const [specs, setSpecs] = useState<FieldSpec[] | null>(null)
+  const [extraValues, setExtraValues] = useState<Record<string, FieldValue>>({})
+  const [rejected, setRejected] = useState<FieldSpec[]>([])
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
+
+  useEffect(() => {
+    let live = true
+    setSpecs(null)
+    setRejected([])
+    setFieldErrors({})
+    call('typeFields', type)
+      .then((s) => live && setSpecs(s))
+      .catch(() => live && setSpecs([]))
+    return () => {
+      live = false
+    }
+  }, [type])
+
+  const descriptionRequired = !!specs?.find((s) => s.referenceName === DESCRIPTION)?.alwaysRequired
+  const extras = [...requiredExtraFields(specs ?? []), ...rejected].filter(
+    (s, i, all) => all.findIndex((x) => x.referenceName === s.referenceName) === i
+  )
+
   const fromUnplanned = route.fromUnplanned ? state.unplanned.find((u) => u.id === route.fromUnplanned) : undefined
   const isTask = /task/i.test(type)
 
   const submit = async (): Promise<void> => {
     if (!title.trim()) return
+    // check what we already know is required before bothering Azure DevOps
+    const missing: Record<string, string> = {}
+    if (descriptionRequired && !description.trim()) missing[DESCRIPTION] = 'Required for this type'
+    for (const s of extras) if (isBlank(extraValues[s.referenceName])) missing[s.referenceName] = 'Required'
+    setFieldErrors(missing)
+    if (Object.keys(missing).length) {
+      setError('')
+      return
+    }
+
     setBusy(true)
     setError('')
     try {
-      const item = await call('createItem', {
+      const fields: Record<string, unknown> = {}
+      for (const s of extras) {
+        const v = extraValues[s.referenceName]
+        if (!isBlank(v)) fields[s.referenceName] = coerceField(s, v!)
+      }
+      const r = await call('createItem', {
         type,
         title: title.trim(),
         description: description.trim() || undefined,
@@ -48,11 +89,26 @@ export function CreateModal({ route, onClose }: { route: Extract<Route, { view: 
         tags: tags.split(/[,;]/).map((t) => t.trim()).filter(Boolean),
         remainingWork: isTask && remaining ? Number(remaining) : undefined,
         startFocus,
+        fields,
         fromUnplanned: route.fromUnplanned,
         fromInbox: route.fromInbox
       })
-      toast(`Created #${item.id}`, { action: { label: 'Open', run: () => openItem(item.id) } })
-      onClose()
+      if (r.ok) {
+        toast(`Created #${r.value.id}`, { action: { label: 'Open', run: () => openItem(r.value.id) } })
+        onClose()
+        return
+      }
+      // Azure DevOps has a rule we didn't know about (conditional or custom): show those fields too.
+      const errs: Record<string, string> = {}
+      const added: FieldSpec[] = []
+      for (const fe of r.fieldErrors) {
+        const ref = fe.referenceName ?? fe.name
+        errs[ref] = fe.required ? 'Required' : fe.message
+        if (fe.field && ref !== DESCRIPTION && !extras.some((x) => x.referenceName === ref)) added.push(fe.field)
+      }
+      setRejected((x) => [...x, ...added])
+      setFieldErrors(errs)
+      setError(r.fieldErrors.length ? `${r.message}. Fill in the highlighted field${r.fieldErrors.length > 1 ? 's' : ''} and create again.` : r.message)
     } catch (e) {
       setError((e as Error).message)
     } finally {
@@ -83,13 +139,40 @@ export function CreateModal({ route, onClose }: { route: Extract<Route, { view: 
         onKeyDown={(e) => e.key === 'Enter' && e.ctrlKey && void submit()}
       >
         <label className="field">
-          Title
+          <span>
+            Title <span className="req">*</span>
+          </span>
           <input ref={titleRef} className="input" style={{ fontSize: 15 }} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Short and specific" />
         </label>
         <label className="field">
-          Description <span className="faint">(optional)</span>
-          <textarea className="textarea" rows={3} value={description} onChange={(e) => setDescription(e.target.value)} />
+          <span>
+            Description{' '}
+            {descriptionRequired ? <span className="req" title="Required by your Azure DevOps process">*</span> : <span className="faint">(optional)</span>}
+          </span>
+          <textarea
+            className={`textarea${fieldErrors[DESCRIPTION] ? ' invalid' : ''}`}
+            rows={3}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+          />
+          {fieldErrors[DESCRIPTION] && <span className="field-error">{fieldErrors[DESCRIPTION]}</span>}
         </label>
+
+        {specs === null && (
+          <div className="faint small">
+            <Loader2 size={12} className="spin" /> Checking what {type} needs…
+          </div>
+        )}
+        {extras.map((s) => (
+          <FieldRow
+            key={s.referenceName}
+            spec={s}
+            value={extraValues[s.referenceName]}
+            onChange={(v) => setExtraValues((x) => ({ ...x, [s.referenceName]: v }))}
+            error={fieldErrors[s.referenceName]}
+          />
+        ))}
+
         <div className="row wrap" style={{ gap: 14, alignItems: 'end' }}>
           <label className="field" style={{ flex: 1, minWidth: 200 }}>
             Parent
@@ -133,7 +216,9 @@ export function CreateModal({ route, onClose }: { route: Extract<Route, { view: 
         </div>
         {error && <div className="error">{error}</div>}
         <div className="row">
-          <span className="faint small">Ctrl+Enter to create</span>
+          <span className="faint small">
+            <span className="req">*</span> required · Ctrl+Enter to create
+          </span>
           <span className="spacer" />
           <button type="button" className="btn ghost" onClick={onClose}>
             Cancel

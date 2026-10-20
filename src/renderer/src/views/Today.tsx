@@ -159,7 +159,7 @@ export function Today(): ReactNode {
 
 /** The big "right now" card. */
 function Hero({ byId }: { byId: Map<number, WorkItem> }): ReactNode {
-  const { state, types, toast, openItem, go } = useApp()
+  const { state, types, toast, openItem, go, updateItem } = useApp()
   const now = useNow()
   const f = state.focus
   const [update, setUpdate] = useState('')
@@ -307,11 +307,7 @@ function Hero({ byId }: { byId: Map<number, WorkItem> }): ReactNode {
           <select
             className="select inline"
             value={item.state}
-            onChange={(e) =>
-              void call('updateItem', item.id, { 'System.State': e.target.value })
-                .then((x) => toast(`#${x.id} → ${x.state}`))
-                .catch((er: Error) => toast(er.message, { error: true }))
-            }
+            onChange={(e) => void updateItem(item, { 'System.State': e.target.value }).then((x) => x && toast(`#${x.id} → ${x.state}`))}
           >
             {typeInfo.states
               .filter((s) => s.category !== 'Removed')
@@ -324,11 +320,7 @@ function Hero({ byId }: { byId: Map<number, WorkItem> }): ReactNode {
         {doneState && item && item.category !== 'Completed' && (
           <button
             className="btn"
-            onClick={() =>
-              void call('updateItem', item.id, { 'System.State': doneState.name })
-                .then(() => toast(`Closed #${item.id}. Nice!`))
-                .catch((er: Error) => toast(er.message, { error: true }))
-            }
+            onClick={() => void updateItem(item, { 'System.State': doneState.name }).then((x) => x && toast(`Closed #${item.id}. Nice!`))}
           >
             <Check size={15} /> Done
           </button>
