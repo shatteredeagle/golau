@@ -16,10 +16,26 @@ extraResources:
   - from: out/THIRD_PARTY_NOTICES.txt
     to: THIRD_PARTY_NOTICES.txt
 win:
-  target: [zip]
+  target: [nsis]
   icon: build/icon.ico
   # rcedit runs under wine when building from Linux
   signAndEditExecutable: true
+# Per-user installer: installs to %LOCALAPPDATA%\Programs\Tasklight, registers the uninstaller
+# under HKCU, and never asks for admin. Settings/token live in %APPDATA%\Tasklight and are kept
+# across uninstall/upgrade.
+nsis:
+  oneClick: true
+  perMachine: false
+  allowElevation: false
+  packElevateHelper: false
+  runAfterFinish: true
+  createDesktopShortcut: false
+  createStartMenuShortcut: true
+  shortcutName: Tasklight
+  deleteAppDataOnUninstall: false
+  differentialPackage: false
+  artifactName: Tasklight-Setup-${version}.exe
+  uninstallDisplayName: Tasklight
 # Hardening switches baked into the exe: no running it as plain Node, no NODE_OPTIONS or
 # --inspect injection, and only load the (integrity-checked) app.asar.
 electronFuses:

@@ -6,9 +6,11 @@ Runs locally (Electron). Windows is the main target; Linux works too. Your PAT i
 
 ## Install (Windows)
 
-1. Download the latest `Tasklight-<version>-win.zip` from [Releases](../../releases) and unzip it anywhere (e.g. `%LOCALAPPDATA%\Tasklight`). No installer, no admin.
-2. Run `Tasklight.exe`. SmartScreen may warn because it's unsigned: **More info → Run anyway**.
+1. Download the latest `Tasklight-Setup-<version>.exe` from [Releases](../../releases) and run it. SmartScreen may warn because it's unsigned: **More info → Run anyway**.
+2. It installs just for you, with **no admin prompt**, into `%LOCALAPPDATA%\Programs\Tasklight`, adds a Start menu shortcut and starts the app.
 3. Paste your org URL + a PAT with **Work Items: Read & write** (+ **Project and Team: Read** to pick a team).
+
+Everything stays in your user profile: the app in `%LOCALAPPDATA%\Programs\Tasklight`, your settings and encrypted token in `%APPDATA%\Tasklight`, the uninstall entry and the optional *Start with Windows* entry under `HKEY_CURRENT_USER`. To upgrade, run a newer setup; to remove, use Settings → Apps (your settings folder is kept; delete it by hand for a clean slate).
 
 Settings → *Start with Windows* makes it launch to the tray at login.
 
@@ -58,14 +60,14 @@ Data lives in `%APPDATA%\Tasklight` (`settings.json`, `state.json`, `secrets.bin
 
 ### CI and releases
 
-- **CI** (`.github/workflows/ci.yml`, every push/PR): typecheck, tests, audit of shipped deps, an offscreen run of every screen against the mock (screenshots uploaded as an artifact; fails if the hostile-HTML check finds anything), and a Windows package build with a fuse check (zip uploaded as a 7-day artifact).
-- **Release** (`.github/workflows/release.yml`): bump `version` in `package.json`, commit, then
+- **CI** (`.github/workflows/ci.yml`, every push/PR): typecheck, tests, audit of shipped deps, an offscreen run of every screen against the mock (screenshots uploaded as an artifact; fails if the hostile-HTML check finds anything), and a Windows installer build with a fuse check and a real install/launch/uninstall test (setup exe uploaded as a 7-day artifact).
+- **Release** (`.github/workflows/release.yml`): builds the per-user installer, installs/launches/uninstalls it on a Windows runner as a test, then publishes. Bump `version` in `package.json`, commit, then
 
   ```bash
   git tag v0.2.0 && git push origin v0.2.0
   ```
 
-  The tag must match `package.json`. It builds natively on Windows, verifies fuses, and publishes a GitHub Release with the zip and `SHA256SUMS.txt`. A hyphenated tag (`v0.2.0-beta.1`) becomes a prerelease.
+  The tag must match `package.json`. It builds natively on Windows, verifies fuses, and publishes a GitHub Release with the setup exe and `SHA256SUMS.txt`. A hyphenated tag (`v0.2.0-beta.1`) becomes a prerelease.
 
 Actions are pinned to commit SHAs; the job that can write to the repo runs no project code.
 

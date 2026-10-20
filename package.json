@@ -18,7 +18,7 @@
     "mock": "node mock/ado-mock.mjs",
     "test": "tsx --test test/scheduler.test.mts test/security.test.mts",
     "shots": "npm run build && TASKLIGHT_DATA=.shots/data TASKLIGHT_SHOTS=.shots electron .",
-    "dist:win": "npm run build && electron-builder --win zip --x64",
+    "dist:win": "npm run build && electron-builder --win nsis --x64",
     "dist:linux": "npm run build && electron-builder --linux dir"
   },
   "devDependencies": {
