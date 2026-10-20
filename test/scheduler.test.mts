@@ -116,7 +116,8 @@ test('outside work hours: no nudges', async () => {
 
 test('morning plan asks at most 3 times a day', async () => {
   const { sched, shown } = setup({ morningPlan: true })
-  let t = Date.now()
+  // start at 09:00 today so 5 simulated hours never cross midnight (CI runs in UTC)
+  let t = new Date().setHours(9, 0, 0, 0)
   for (let i = 0; i < 10; i++) {
     await sched.tick(t)
     t += 31 * MIN
