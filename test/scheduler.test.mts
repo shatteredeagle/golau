@@ -8,7 +8,7 @@ import type { AppState, Nudge, Settings, WorkItem } from '../src/shared/types.ts
 
 const settings: Settings = {
   orgUrl: 'x', project: 'p', team: '', hasPat: true,
-  checkInMinutes: 45, noFocusMinutes: 15, unplannedAskMinutes: 20, staleDays: 3, hyperfocusMinutes: 90, idleMinutes: 10,
+  checkInMinutes: 45, noFocusMinutes: 15, unplannedAskMinutes: 20, staleDays: 3, hyperfocusMinutes: 90, nudgeGapMinutes: 0, idleMinutes: 10,
   workStart: '00:00', workEnd: '23:59', eodTime: '23:58', workDays: [0, 1, 2, 3, 4, 5, 6],
   nudgesEnabled: true, morningPlan: false, morningPlanUntil: '23:59', eodCheckIn: false, logCompletedWork: false,
   captureHotkey: '', showMini: false, closeToTray: true, launchAtLogin: false, theme: 'dark',
@@ -149,6 +149,42 @@ test('no plan today carries the last real plan over', async () => {
   const today = { ...plans, '2026-10-22': { itemIds: [], createdAt: 0, skipped: true } }
   assert.equal(currentPlan(today, now)?.carried, false, 'skipping today is a choice, nothing carries')
   assert.equal(currentPlan({}, now), undefined)
+})
+
+test('ignoring a nudge doubles its wait, answering resets it', async () => {
+  const { sched, shown } = setup({ noFocusMinutes: 15 })
+  let t = new Date().setHours(9, 0, 0, 0)
+  const nofocus = () => shown.filter((n) => n.kind === 'nofocus').length
+  await sched.tick(t) // starts the "nothing in focus" clock
+  await sched.tick((t += 16 * MIN))
+  assert.equal(nofocus(), 1)
+  sched.ignored('nofocus', t) // waits 30 min now
+  await sched.tick((t += 20 * MIN))
+  assert.equal(nofocus(), 1)
+  await sched.tick((t += 11 * MIN))
+  assert.equal(nofocus(), 2)
+  sched.ignored('nofocus', t) // 60 min
+  await sched.tick((t += 45 * MIN))
+  assert.equal(nofocus(), 2)
+  await sched.tick((t += 16 * MIN))
+  assert.equal(nofocus(), 3)
+  sched.answered('nofocus')
+  sched.ignored('nofocus', t) // streak restarted: 30 again
+  await sched.tick((t += 31 * MIN))
+  assert.equal(nofocus(), 4)
+})
+
+test('a minimum gap between any two nudges', async () => {
+  const { tracker, sched, shown } = setup({ nudgeGapMinutes: 20, hyperfocusMinutes: 50, checkInMinutes: 45 })
+  tracker.startItem({ id: 7, title: 'Thing', type: 'Task' })
+  const t0 = tracker.s.focus!.startedAt
+  await sched.tick(t0 + 46 * MIN)
+  assert.equal(shown.at(-1)?.kind, 'checkin')
+  tracker.confirm()
+  await sched.tick(t0 + 51 * MIN)
+  assert.equal(shown.length, 1, 'hyperfocus waits for the gap')
+  await sched.tick(t0 + 67 * MIN)
+  assert.equal(shown.at(-1)?.kind, 'hyperfocus')
 })
 
 test('hyperfocus break suggestion once per stretch', async () => {

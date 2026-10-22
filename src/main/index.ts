@@ -256,7 +256,7 @@ function showNudge(n: Nudge): void {
   if (n.timeout) {
     nudgeTimer = setTimeout(() => {
       const def = n.actions.find((a) => a.onTimeout)
-      if (currentNudge?.id === n.id) void nudgeAction(n.id, def?.id ?? 'dismiss', {})
+      if (currentNudge?.id === n.id) void nudgeAction(n.id, def?.id ?? 'dismiss', { ignored: true })
     }, n.timeout * 1000)
   }
 }
@@ -336,10 +336,12 @@ function updateTray(): void {
 
 // ---------- nudge actions ----------
 
-async function nudgeAction(id: string, action: string, payload: { text?: string; itemId?: number }): Promise<void> {
+async function nudgeAction(id: string, action: string, payload: { text?: string; itemId?: number; ignored?: boolean }): Promise<void> {
   const n = currentNudge
   if (!n || n.id !== id) return
   hideNudge()
+  if (payload.ignored) scheduler.ignored(n.kind)
+  else scheduler.answered(n.kind)
   const t = tracker
   switch (n.kind) {
     case 'checkin':
@@ -549,7 +551,7 @@ const api = {
 
   // windows
   showMain: (route?: Route) => showMain(route),
-  nudgeAction: (id: string, action: string, payload: { text?: string; itemId?: number }) => nudgeAction(id, action, payload ?? {}),
+  nudgeAction: (id: string, action: string, payload: { text?: string; itemId?: number; ignored?: boolean }) => nudgeAction(id, action, payload ?? {}),
   nudgeResize: (h: number) => {
     if (nudgeWin && !nudgeWin.isDestroyed()) placeNudge(nudgeWin, h)
   },

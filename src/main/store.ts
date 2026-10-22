@@ -14,6 +14,7 @@ export const DEFAULT_SETTINGS: Settings = {
   unplannedAskMinutes: 20,
   staleDays: 3,
   hyperfocusMinutes: 90,
+  nudgeGapMinutes: 20,
   idleMinutes: 10,
   workStart: '08:30',
   workEnd: '17:30',

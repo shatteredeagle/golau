@@ -8,8 +8,15 @@ What changed in each Golau release, for the people using it. The release workflo
 - **The morning plan prompt stops at 10:30.** If you haven't planned by then, Golau stops asking for the day. Change the time in Settings → Your day ("Stop offering after").
 - **No plan today means you're carrying on.** When you don't make a plan, Today shows your last plan with a "carried over from …" tag, and card picking, the wrap-up and "What are you working on?" use it too. Plan my day is still there whenever you want a fresh one.
 
+- **Fewer, calmer nudges.**
+  - Ignoring a nudge (letting it time out, or closing it with ✕) now makes that kind of nudge wait twice as long next time: "What are you working on?" goes 15 → 30 → 60 min and so on, up to 4 hours. Answering it resets the wait.
+  - At least 20 minutes between any two nudges, so different kinds no longer stack up. Change it in Settings → Nudges. Coming back from being away still greets you straight away.
+  - Every nudge now disappears on its own. Welcome back, the morning plan, the wrap-up and "Is there a card for this?" used to wait until you clicked.
+  - "Still on this?" goes away after 45 seconds (was 90).
+
 ### Notes
 - "Skip today" on the prompt still means no plan for today; nothing is carried over.
+- A welcome-back that times out leaves your timer paused; nothing starts on its own.
 
 ## 0.3.3
 

@@ -38,7 +38,7 @@ export function NudgeSurface(): ReactNode {
   }, [n?.id])
 
   if (!n) return null
-  const act = (id: string, payload: { text?: string; itemId?: number } = {}): void => {
+  const act = (id: string, payload: { text?: string; itemId?: number; ignored?: boolean } = {}): void => {
     void call('nudgeAction', n.id, id, payload)
     setN(null)
   }
@@ -48,7 +48,7 @@ export function NudgeSurface(): ReactNode {
     <div className="nudge" ref={box}>
       <div className="head">
         <b>{n.title}</b>
-        <button className="icon-btn" title="Later" onClick={() => act(n.actions.find((a) => a.onTimeout)?.id ?? 'dismiss')}>
+        <button className="icon-btn" title="Later" onClick={() => act(n.actions.find((a) => a.onTimeout)?.id ?? 'dismiss', { ignored: true })}>
           <X size={16} />
         </button>
       </div>

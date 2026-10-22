@@ -132,9 +132,10 @@ export function SettingsView(): ReactNode {
               {num('hyperfocusMinutes', 'Suggest a break after', 'minutes straight', 30, 480)}
               {num('staleDays', 'Card counts as quiet after', 'days without changes', 1, 60)}
               {num('idleMinutes', 'Pause the timer when away for', 'minutes', 2, 120)}
+              {num('nudgeGapMinutes', 'At least this long between nudges', 'minutes', 0, 240)}
             </div>
             <div className="faint small">
-              Every nudge has a no-guilt "later", most disappear on their own, and the tray menu has "Quiet for…" for focus blocks and meetings.
+              Every nudge has a no-guilt "later" and disappears on its own. Ignoring one (or closing it with ✕) makes that kind wait twice as long next time; answering it resets that. The tray menu has "Quiet for…" for focus blocks and meetings.
             </div>
           </div>
         </div>

@@ -133,6 +133,8 @@ export interface Settings {
   unplannedAskMinutes: number
   staleDays: number
   hyperfocusMinutes: number
+  /** minimum minutes between two nudges (coming back from away is exempt) */
+  nudgeGapMinutes: number
   /** pause the timer after this much system idle time */
   idleMinutes: number
   workStart: string // HH:MM

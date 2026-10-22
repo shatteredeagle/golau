@@ -21,11 +21,16 @@ export interface SchedulerDeps {
  * - one nudge on screen at a time, never while you're idle or outside work hours
  * - every nudge has a no-guilt "later" and most auto-dismiss to the gentle default
  * - each kind backs off after it's shown, so ignoring it doesn't cause a pile-up
+ * - ignoring a kind (timeout or ✕) doubles its wait each time; answering resets it
+ * - a minimum gap between any two nudges, so different kinds don't stack up
  */
 export class Scheduler {
   private snoozed = new Map<NudgeKind, number>()
   private askedDay = new Map<NudgeKind, string>()
   private noFocusSince?: number
+  private lastShownAt = 0
+  private backoff = new Map<NudgeKind, number>()
+  private ignoredStreak = new Map<NudgeKind, number>()
   private timer?: NodeJS.Timeout
   private d: SchedulerDeps
 
@@ -56,6 +61,19 @@ export class Scheduler {
     this.askedDay.set(kind, dayKey(this.now))
   }
 
+  /** The nudge timed out or was closed: wait longer before asking that again. */
+  ignored(kind: NudgeKind, now = this.now): void {
+    const s = this.d.settings()
+    const n = (this.ignoredStreak.get(kind) ?? 0) + 1
+    this.ignoredStreak.set(kind, n)
+    const base = kind === 'checkin' ? s.checkInMinutes : kind === 'nofocus' ? s.noFocusMinutes : (this.backoff.get(kind) ?? 30)
+    this.snoozed.set(kind, now + Math.min(base * 2 ** n, 240) * 60000)
+  }
+
+  answered(kind: NudgeKind): void {
+    this.ignoredStreak.delete(kind)
+  }
+
   private ready(kind: NudgeKind, now: number): boolean {
     if ((this.snoozed.get(kind) ?? 0) > now) return false
     return this.askedDay.get(kind) !== dayKey(now)
@@ -70,6 +88,8 @@ export class Scheduler {
 
   private show(kind: NudgeKind, n: Omit<Nudge, 'id' | 'kind'>, backoffMin: number): void {
     this.snooze(kind, backoffMin)
+    this.backoff.set(kind, backoffMin)
+    this.lastShownAt = this.now
     // Morning/EOD asks give up after 3 tries a day; ignoring them is an answer too.
     const k = `${kind}:${dayKey(this.now)}`
     const count = (this.shownToday.get(k) ?? 0) + 1
@@ -123,6 +143,7 @@ export class Scheduler {
         {
           title: p.reason === 'break' ? 'Break done?' : 'Welcome back',
           body: `You were on ${label} (away ${away}).${note ? `\nYou left off: ${note}` : ''}`,
+          timeout: 120,
           actions: [
             { id: 'resume', label: 'Pick it back up', primary: true },
             { id: 'switch', label: 'Something else' },
@@ -134,6 +155,7 @@ export class Scheduler {
     }
 
     if (!this.inWorkHours(now, s)) return
+    if (now - this.lastShownAt < s.nudgeGapMinutes * 60000) return
 
     // Morning plan: once, the first time you're active in work hours. After the cutoff it
     // stops asking; no plan today means carrying on with the last one.
@@ -144,9 +166,10 @@ export class Scheduler {
         {
           title: 'Morning! Plan the day?',
           body: n ? `${n} card${n > 1 ? 's' : ''} in progress. Pick what matters today, takes ~2 min.` : 'Pick what matters today, takes ~2 min.',
+          timeout: 90,
           actions: [
             { id: 'plan', label: 'Plan my day', primary: true },
-            { id: 'later', label: 'In 30 min' },
+            { id: 'later', label: 'In 30 min', onTimeout: true },
             { id: 'skip', label: 'Skip today' }
           ]
         },
@@ -161,9 +184,10 @@ export class Scheduler {
         {
           title: 'Wrap up the day?',
           body: 'Quick pass over what you touched today so your cards match reality. ~3 min.',
+          timeout: 90,
           actions: [
             { id: 'start', label: 'Wrap up', primary: true },
-            { id: 'later', label: '15 min' },
+            { id: 'later', label: '15 min', onTimeout: true },
             { id: 'skip', label: 'Skip today' }
           ]
         },
@@ -202,12 +226,13 @@ export class Scheduler {
               title: 'Is there a card for this?',
               body: `"${e.text}" has been going ${fmtDur(on)}.`,
               suggestions,
+              timeout: 90,
               data: { unplannedId: e.id, text: e.text },
               actions: [
                 { id: 'create', label: 'Make a card', primary: true },
                 { id: 'find', label: 'Find one…' },
                 { id: 'kept', label: 'No card needed' },
-                { id: 'later', label: 'Ask later' }
+                { id: 'later', label: 'Ask later', onTimeout: true }
               ]
             },
             30
@@ -223,7 +248,7 @@ export class Scheduler {
           {
             title: 'Still on this?',
             body: `${label}\n${fmtDur(on)} so far`,
-            timeout: 90,
+            timeout: 45,
             data: { itemId: f.itemId },
             actions: [
               { id: 'yes', label: 'Yep', primary: true, onTimeout: true },
