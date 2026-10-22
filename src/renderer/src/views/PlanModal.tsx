@@ -3,6 +3,7 @@ import { Check, Play } from 'lucide-react'
 import type { WorkItem } from '@shared/types'
 import { dayKey } from '@shared/time'
 import { staleItems } from '@shared/stale'
+import { currentPlan } from '@shared/plan'
 import { call } from '../api'
 import { Modal, ModalHead, StaleBadge, StatePill, Steps, TypeChip, bucket, useApp, useStartFocus } from '../components'
 
@@ -16,10 +17,10 @@ export function PlanModal({ onClose }: { onClose: () => void }): ReactNode {
   const today = dayKey()
   const existing = state.plans[today]
 
-  // yesterday's (or the last plan's) unfinished items come pre-ticked
+  // the last real plan's unfinished items come pre-ticked
   const lastPlan = useMemo(() => {
-    const keys = Object.keys(state.plans).filter((k) => k < today).sort()
-    return keys.length ? state.plans[keys[keys.length - 1]] : undefined
+    const prev = Object.fromEntries(Object.entries(state.plans).filter(([k]) => k < today))
+    return currentPlan(prev)?.plan
   }, [state.plans, today])
 
   const cols = bucket(work ?? [])

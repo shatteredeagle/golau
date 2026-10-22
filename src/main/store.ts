@@ -21,6 +21,7 @@ export const DEFAULT_SETTINGS: Settings = {
   workDays: [1, 2, 3, 4, 5],
   nudgesEnabled: true,
   morningPlan: true,
+  morningPlanUntil: '10:30',
   eodCheckIn: true,
   logCompletedWork: false,
   captureHotkey: 'CommandOrControl+Alt+Space',

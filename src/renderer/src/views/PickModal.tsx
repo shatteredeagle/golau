@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Loader2, Plus, Zap } from 'lucide-react'
 import type { WorkItem } from '@shared/types'
-import { dayKey } from '@shared/time'
+import { currentPlan } from '@shared/plan'
 import { call } from '../api'
 import { Modal, ModalHead, StatePill, TypeChip, useApp, useAutoFocus, useDebounced, useStartFocus } from '../components'
 
@@ -28,7 +28,7 @@ export function PickModal({
   const [kb, setKb] = useState(0)
   const input = useAutoFocus<HTMLInputElement>()
 
-  const planIds = state.plans[dayKey()]?.itemIds ?? []
+  const planIds = currentPlan(state.plans)?.plan.itemIds ?? []
   const local = useMemo(() => {
     const active = (work ?? []).filter((i) => i.category !== 'Completed' && i.category !== 'Removed')
     const rank = (i: WorkItem): number =>

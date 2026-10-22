@@ -2,6 +2,15 @@
 
 What changed in each Golau release, for the people using it. The release workflow publishes the section for each version as its release notes, so every version needs one here before it's tagged.
 
+## 0.3.4
+
+### Changed
+- **The morning plan prompt stops at 10:30.** If you haven't planned by then, Golau stops asking for the day. Change the time in Settings → Your day ("Stop offering after").
+- **No plan today means you're carrying on.** When you don't make a plan, Today shows your last plan with a "carried over from …" tag, and card picking, the wrap-up and "What are you working on?" use it too. Plan my day is still there whenever you want a fresh one.
+
+### Notes
+- "Skip today" on the prompt still means no plan for today; nothing is carried over.
+
 ## 0.3.3
 
 ### New

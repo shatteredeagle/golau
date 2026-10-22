@@ -10,7 +10,7 @@ const settings: Settings = {
   orgUrl: 'x', project: 'p', team: '', hasPat: true,
   checkInMinutes: 45, noFocusMinutes: 15, unplannedAskMinutes: 20, staleDays: 3, hyperfocusMinutes: 90, idleMinutes: 10,
   workStart: '00:00', workEnd: '23:59', eodTime: '23:58', workDays: [0, 1, 2, 3, 4, 5, 6],
-  nudgesEnabled: true, morningPlan: false, eodCheckIn: false, logCompletedWork: false,
+  nudgesEnabled: true, morningPlan: false, morningPlanUntil: '23:59', eodCheckIn: false, logCompletedWork: false,
   captureHotkey: '', showMini: false, closeToTray: true, launchAtLogin: false, theme: 'dark',
   busybar: { enabled: false, host: '', hasKey: false, priority: 40 }
 }
@@ -123,6 +123,32 @@ test('morning plan asks at most 3 times a day', async () => {
     t += 31 * MIN
   }
   assert.equal(shown.filter((n) => n.kind === 'morning').length, 3)
+})
+
+test('morning plan stops asking after the cutoff', async () => {
+  const { sched, shown } = setup({ morningPlan: true, morningPlanUntil: '10:30' })
+  await sched.tick(new Date().setHours(10, 29, 0, 0))
+  assert.equal(shown.filter((n) => n.kind === 'morning').length, 1)
+  // came back from the snooze after the cutoff: no second ask
+  await sched.tick(new Date().setHours(11, 5, 0, 0))
+  assert.equal(shown.filter((n) => n.kind === 'morning').length, 1)
+  const late = setup({ morningPlan: true, morningPlanUntil: '10:30' })
+  await late.sched.tick(new Date().setHours(10, 31, 0, 0))
+  assert.equal(late.shown.length, 0, 'first active after the cutoff: never asked')
+})
+
+test('no plan today carries the last real plan over', async () => {
+  const { currentPlan } = await import('../src/shared/plan.ts')
+  const now = new Date(2026, 9, 22, 11).getTime()
+  const plans = {
+    '2026-10-19': { itemIds: [1], createdAt: 0 },
+    '2026-10-20': { itemIds: [2, 3], createdAt: 0 },
+    '2026-10-21': { itemIds: [], createdAt: 0, skipped: true }
+  }
+  assert.deepEqual(currentPlan(plans, now), { plan: plans['2026-10-20'], day: '2026-10-20', carried: true })
+  const today = { ...plans, '2026-10-22': { itemIds: [], createdAt: 0, skipped: true } }
+  assert.equal(currentPlan(today, now)?.carried, false, 'skipping today is a choice, nothing carries')
+  assert.equal(currentPlan({}, now), undefined)
 })
 
 test('hyperfocus break suggestion once per stretch', async () => {

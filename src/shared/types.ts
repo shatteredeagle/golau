@@ -141,6 +141,8 @@ export interface Settings {
   workDays: number[] // 0=Sun
   nudgesEnabled: boolean
   morningPlan: boolean
+  /** HH:MM; no morning plan prompt after this, you carry on with the last plan */
+  morningPlanUntil: string
   eodCheckIn: boolean
   logCompletedWork: boolean
   captureHotkey: string

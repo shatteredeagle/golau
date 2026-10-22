@@ -5,13 +5,16 @@ import { atTime, dayKey, fmtClock, fmtDur, startOfDay, todayTotals } from '@shar
 import { call, useNow } from '../api'
 import { ItemRow, StatePill, TypeChip, bucket, useApp } from '../components'
 import { staleItems } from '@shared/stale'
+import { currentPlan } from '@shared/plan'
 import { PickModal } from './PickModal'
 
 export function Today(): ReactNode {
   const { state, work, settings, go, workError } = useApp()
   const now = useNow(15000)
   const totals = useMemo(() => todayTotals(state, now), [state, now])
-  const plan = state.plans[dayKey(now)]
+  const current = currentPlan(state.plans, now)
+  const plan = current?.plan
+  const carriedFrom = current?.carried ? new Date(`${current.day}T12:00`).toLocaleDateString(undefined, { weekday: 'long' }) : undefined
   const byId = useMemo(() => new Map((work ?? []).map((i) => [i.id, i])), [work])
   const cols = bucket(work ?? [])
   const totalToday = [...totals.values()].reduce((a, b) => a + b, 0)
@@ -47,7 +50,7 @@ export function Today(): ReactNode {
           </div>
         </div>
         <span className="spacer" />
-        {!plan && (
+        {(!plan || carriedFrom) && (
           <button className="btn" onClick={() => go({ view: 'plan' })}>
             <Sunrise size={15} /> Plan my day
           </button>
@@ -66,7 +69,8 @@ export function Today(): ReactNode {
           <section>
             <div className="section-title">
               Today's plan
-              {plan && !plan.skipped && (
+              {carriedFrom && <span className="pill">carried over from {carriedFrom}</span>}
+              {plan && !plan.skipped && !carriedFrom && (
                 <button className="btn ghost sm" onClick={() => go({ view: 'plan' })}>
                   edit
                 </button>

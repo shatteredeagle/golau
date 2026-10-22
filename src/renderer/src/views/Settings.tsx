@@ -33,7 +33,7 @@ export function SettingsView(): ReactNode {
       </div>
     </label>
   )
-  const time = (key: 'workStart' | 'workEnd' | 'eodTime', label: string): ReactNode => (
+  const time = (key: 'workStart' | 'workEnd' | 'eodTime' | 'morningPlanUntil', label: string): ReactNode => (
     <label className="field">
       {label}
       <input className="input" style={{ width: 130 }} type="time" value={settings[key]} onChange={(e) => set({ [key]: e.target.value })} />
@@ -105,7 +105,11 @@ export function SettingsView(): ReactNode {
               {time('workEnd', 'End')}
               {time('eodTime', 'Wrap-up reminder')}
             </div>
-            {check('morningPlan', 'Offer a morning plan', 'first time you\'re active on a work day')}
+            <div className="row wrap" style={{ gap: 18, alignItems: 'flex-end' }}>
+              {check('morningPlan', 'Offer a morning plan', 'first time you\'re active on a work day')}
+              {settings.morningPlan && time('morningPlanUntil', 'Stop offering after')}
+            </div>
+            <div className="faint small">Didn't plan? Golau keeps yesterday's plan going; you can still plan any time from Today.</div>
             {check('eodCheckIn', 'Offer an end-of-day wrap up')}
             <div className="faint small">Nudges only happen inside these hours. Outside them Golau still tracks time but stays quiet.</div>
           </div>

@@ -3,6 +3,7 @@ import { atTime, dayKey, daysSince, fmtDur } from '../shared/time'
 import type { Nudge, NudgeKind, Settings, WorkItem } from '../shared/types'
 import type { Tracker } from './tracker'
 import { staleItems } from '../shared/stale'
+import { currentPlan } from '../shared/plan'
 
 export interface SchedulerDeps {
   settings: () => Settings
@@ -134,8 +135,9 @@ export class Scheduler {
 
     if (!this.inWorkHours(now, s)) return
 
-    // Morning plan: once, the first time you're active in work hours.
-    if (s.morningPlan && !st.plans[today] && this.ready('morning', now)) {
+    // Morning plan: once, the first time you're active in work hours. After the cutoff it
+    // stops asking; no plan today means carrying on with the last one.
+    if (s.morningPlan && !st.plans[today] && now < atTime(s.morningPlanUntil, now) && this.ready('morning', now)) {
       const n = this.d.myWork().filter((i) => i.category === 'InProgress').length
       return this.show(
         'morning',
@@ -238,12 +240,12 @@ export class Scheduler {
 
     // Active at the keyboard with nothing in focus.
     if (this.noFocusSince && now - this.noFocusSince >= s.noFocusMinutes * 60000 && this.ready('nofocus', now)) {
-      const plan = st.plans[today]?.itemIds ?? []
+      const plan = currentPlan(st.plans, now)?.plan.itemIds ?? []
       return this.show(
         'nofocus',
         {
           title: 'What are you working on?',
-          body: p?.reason === 'manual' ? `Paused: ${p.focus.title}` : plan.length ? `${plan.length} card${plan.length > 1 ? 's' : ''} on today's plan.` : undefined,
+          body: p?.reason === 'manual' ? `Paused: ${p.focus.title}` : plan.length ? `${plan.length} card${plan.length > 1 ? 's' : ''} on your plan.` : undefined,
           timeout: 120,
           data: { input: true },
           actions: [

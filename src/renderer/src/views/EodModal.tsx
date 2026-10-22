@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Check, Loader2, PartyPopper } from 'lucide-react'
 import type { WorkItem } from '@shared/types'
-import { dayKey, fmtDur, startOfDay, todayTotals } from '@shared/time'
+import { fmtDur, startOfDay, todayTotals } from '@shared/time'
 import { staleItems } from '@shared/stale'
+import { currentPlan } from '@shared/plan'
 import { call } from '../api'
 import { Modal, ModalHead, StaleBadge, StatePill, Steps, TypeChip, useApp } from '../components'
 import { PickModal } from './PickModal'
@@ -17,7 +18,7 @@ const CHIPS = ['Made progress', 'Blocked on ', 'Ready for review', 'Waiting on s
 export function EodModal({ onClose }: { onClose: () => void }): ReactNode {
   const { work, state, settings, toast } = useApp()
   const totals = useMemo(() => todayTotals(state), [state])
-  const plan = state.plans[dayKey()]
+  const plan = currentPlan(state.plans)?.plan
   const [extra, setExtra] = useState<WorkItem[]>([])
   const [idx, setIdx] = useState(0)
   const [saved, setSaved] = useState<number[]>([])
