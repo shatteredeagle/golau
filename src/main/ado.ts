@@ -500,7 +500,7 @@ export class AdoClient {
    * fields: ADO reference name → value (null removes). `parent` (a card id, or null to remove) goes in the same PATCH,
    * so a refused link or a rule error leaves the old parent and every field as they were.
    */
-  async updateItem(id: number, fields: Record<string, unknown>, parent?: number | null): Promise<WorkItem> {
+  async updateItem(id: number, fields: Record<string, unknown>, parent?: number | null, rev?: number): Promise<WorkItem> {
     assertId(id)
     const ops: unknown[] = Object.entries(fields).map(([k, v]) =>
       v === null ? { op: 'remove', path: `/fields/${assertField(k)}` } : { op: 'add', path: `/fields/${assertField(k)}`, value: v }
@@ -512,6 +512,7 @@ export class AdoClient {
       ops.unshift(...parentPatch(this.org, cur, parent))
     }
     if (!ops.length) return this.getItem(id)
+    if (rev !== undefined) ops.unshift({ op: 'test', path: '/rev', value: rev })
     await this.req(`${url}?${API}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json-patch+json' },

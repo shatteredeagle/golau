@@ -2,6 +2,16 @@
 
 What changed in each Golau release, for the people using it. The release workflow publishes the section for each version as its release notes, so every version needs one here before it's tagged.
 
+## 0.4.1
+
+### New
+- **Edit the description and acceptance criteria.** Each has an *Edit* button in the card panel. You edit Markdown-style text (`**bold**`, `*italic*`, `- bullets`, `1. numbered`, `[text](https://link)`) and Golau saves it back as the simple HTML Azure DevOps stores. Ctrl+Enter saves, Esc cancels.
+- **The same formatting works when you create a card and when you post an update.**
+
+### Notes
+- **Nothing is lost silently.** Golau only offers *Edit* when the stored text can be written back exactly as it was (plain lines, bold, italic, links, lists). If it has tables, images, @mentions, colours or other rich formatting, you'll see "Has rich formatting" and an *Open in ADO* button instead.
+- **Someone else's change is never overwritten.** If the card changed in Azure DevOps after you started editing, the save is refused with Azure DevOps's message and your text stays in the box. Press F5 to see their version, then copy your changes across.
+
 ## 0.4.0
 
 ### New

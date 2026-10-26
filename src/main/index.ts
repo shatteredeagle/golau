@@ -2,6 +2,7 @@ import { app, BrowserWindow, clipboard, globalShortcut, ipcMain, Menu, nativeIma
 import { join } from 'path'
 import { pathToFileURL } from 'url'
 import { AdoClient, AdoError, assertId, checkOrgUrl } from './ado'
+import { textToHtml } from '../shared/richtext'
 import { DEV, devEnv } from './env'
 import { BusyBar } from './busybar'
 import { Scheduler } from './scheduler'
@@ -183,14 +184,8 @@ async function asMutationError(e: unknown, type: string | undefined, project?: s
   throw e
 }
 
-const toHtml = (text: string): string =>
-  text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .split(/\n/)
-    .map((l) => `<div>${l || '<br>'}</div>`)
-    .join('')
+/** Text typed in Golau (Markdown-style: **bold**, *italic*, - lists, [links](https://…)) → the simple HTML Azure DevOps stores. */
+const toHtml = textToHtml
 
 // ---------- broadcasting ----------
 
@@ -464,13 +459,17 @@ const api = {
     await guarded(() => client().addComment(id, toHtml(text), project))
     tracker.addWin({ itemId: id, title: tracker.s.titles[id]?.title ?? `#${id}`, kind: 'commented' })
   },
-  /** `fields.$parent`: a card id (or null) to make the card's parent, applied together with the other fields. */
+  /**
+   * `fields.$parent`: a card id (or null) to make the card's parent. `fields.$rev`: the revision the edit was made on; if the
+   * card has changed since, Azure DevOps refuses it instead of overwriting. Both are applied together with the other fields.
+   */
   updateItem: async (id: number, fields: Record<string, unknown>): Promise<Mutation<WorkItem>> => {
-    const { $parent, ...plain } = fields
+    const { $parent, $rev, ...plain } = fields
+    if ($rev !== undefined && (typeof $rev !== 'number' || !Number.isSafeInteger($rev) || $rev < 0)) throw new Error('Bad revision')
     if ($parent !== undefined && $parent !== null) assertId($parent)
     const before = workCache.find((x) => x.id === id) ?? (await guarded(() => client().getItem(id)))
     try {
-      const item = await guarded(async () => client().updateItem(id, await normalizeFields(before.type, before.project, plain), $parent as number | null | undefined))
+      const item = await guarded(async () => client().updateItem(id, await normalizeFields(before.type, before.project, plain), $parent as number | null | undefined, $rev as number | undefined))
       touchCache(item)
       if (typeof $parent === 'number') {
         const parent = await guarded(() => client().getItem($parent)).catch(() => undefined)

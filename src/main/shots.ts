@@ -376,6 +376,63 @@ export async function runShots(d: ShotDeps, dir: string): Promise<void> {
     console.error('FIELDS EDIT CHECK FAILED')
     failed = true
   }
+  // description: simple HTML is editable as Markdown-style text; rich HTML is not; someone else's edit is never overwritten
+  const setArea = (value: string): Promise<unknown> =>
+    js(`(() => { const t = document.querySelector('.drawer textarea:not(.title-edit):not(.textarea[placeholder])') ?? [...document.querySelectorAll('.drawer textarea')].find((x) => !x.classList.contains('title-edit') && x.rows === 8); if (!t) return false; Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(t, ${JSON.stringify(value)}); t.dispatchEvent(new Event('input', { bubbles: true })); return true })()`)
+  const clickBtn = (text: string): Promise<unknown> => js(`[...document.querySelectorAll('.drawer section .btn')].find((b) => b.textContent.trim() === ${JSON.stringify(text)})?.click()`)
+  const descOf = (id: number): Promise<string> => js(`window.tl.call('getItem', ${id}).then((i) => i.description ?? '')`) as Promise<string>
+  await route({ view: 'item', id: 4114 })
+  await wait(1200)
+  await clickBtn('Edit')
+  await wait(500)
+  await setArea('Needs a **rate limit** of *100*/min\n- per key\n- per IP\n\nSee [docs](https://example.com/limits)')
+  await snap(d.main(), '05j-description-edit')
+  await clickBtn('Save')
+  await wait(1500)
+  const savedDesc = await descOf(4114)
+  const editorClosed = (await js(`![...document.querySelectorAll('.drawer textarea')].some((x) => x.rows === 8)`)) === true
+  // reopening shows the same text back
+  await clickBtn('Edit')
+  await wait(500)
+  const reopened = (await js(`[...document.querySelectorAll('.drawer textarea')].find((x) => x.rows === 8)?.value`)) as string
+  await clickBtn('Cancel')
+  // rich html (iframe, svg, form...): no Edit, points at ADO
+  await route({ view: 'item', id: 4107 })
+  await wait(1200)
+  const richNoEdit = (await js(`!([...document.querySelectorAll('.drawer section .btn')].some((b) => b.textContent.trim() === 'Edit')) && /rich formatting/.test(document.querySelector('.drawer')?.textContent ?? '')`)) === true
+  // a change made in ADO after the editor opened: the save is refused and the text stays put
+  await route({ view: 'item', id: 4114 })
+  await wait(1200)
+  await clickBtn('Edit')
+  await wait(500)
+  await setArea('my edit that must not overwrite')
+  await fetch('http://localhost:7071/mockorg/_apis/wit/workitems/4114?api-version=7.1', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json-patch+json', Authorization: `Basic ${Buffer.from(':mock-pat').toString('base64')}` },
+    body: JSON.stringify([{ op: 'add', path: '/fields/System.Title', value: 'Rate limit public API (renamed in ADO)' }])
+  })
+  await clickBtn('Save')
+  await wait(1500)
+  const conflict = (await js(`document.querySelector('.toast.error')?.textContent ?? ''`)) as string
+  const stillEditing = (await js(`[...document.querySelectorAll('.drawer textarea')].some((x) => x.rows === 8)`)) === true
+  const kept = await descOf(4114)
+  await clickBtn('Cancel')
+  console.log('description-check', JSON.stringify({ savedDesc, editorClosed, reopened, richNoEdit, conflict, stillEditing, kept }))
+  if (
+    !/<b>rate limit<\/b>/.test(savedDesc) ||
+    !/<i>100<\/i>/.test(savedDesc) ||
+    !/<ul><li>per key<\/li><li>per IP<\/li><\/ul>/.test(savedDesc) ||
+    !/<a href="https:\/\/example.com\/limits">docs<\/a>/.test(savedDesc) ||
+    !editorClosed ||
+    !/\*\*rate limit\*\*/.test(reopened) ||
+    !richNoEdit ||
+    !/TF401028|revision/i.test(conflict) ||
+    !stillEditing ||
+    kept !== savedDesc
+  ) {
+    console.error('DESCRIPTION CHECK FAILED')
+    failed = true
+  }
   // a card that already breaks a rule (the mock PBI has no Customer): re-parenting asks for it, like any other edit
   await route({ view: 'item', id: 4110 })
   await wait(1200)

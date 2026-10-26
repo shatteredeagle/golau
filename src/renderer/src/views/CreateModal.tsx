@@ -161,6 +161,7 @@ export function CreateModal({ route, onClose }: { route: Extract<Route, { view: 
             value={description}
             onChange={(e) => setDescription(e.target.value)}
           />
+          <span className="faint small">**bold** · *italic* · - bullet · 1. numbered · [text](https://link)</span>
           {fieldErrors[DESCRIPTION] && <span className="field-error">{fieldErrors[DESCRIPTION]}</span>}
         </label>
 

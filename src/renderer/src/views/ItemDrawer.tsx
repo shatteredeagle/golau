@@ -7,6 +7,7 @@ import { FocusButton, Html, OpenInAdo, StaleBadge, TypeChip, useApp } from '../c
 import { FieldEditor, timeEstimateSpec } from '../fields'
 import { PickModal } from './PickModal'
 import { ListPicker, type Choice } from './ListPicker'
+import { RichField } from './RichField'
 import { addTags, joinTags, numberOrNull } from '@shared/edit'
 
 export function ItemDrawer({ id, onClose }: { id: number; onClose: () => void }): ReactNode {
@@ -94,6 +95,16 @@ export function ItemDrawer({ id, onClose }: { id: number; onClose: () => void })
     if (msg) toast(msg)
   }
 
+  /** Description-style edits carry the revision they were made on, so someone else's change in ADO is never overwritten. */
+  const saveRich =
+    (ref: string) =>
+    async (html: string | null): Promise<boolean> => {
+      const it = await updateItem({ id, title: item?.title ?? `#${id}` }, { [ref]: html, $rev: item?.rev })
+      if (!it) return false
+      setItem(it)
+      toast('Saved')
+      return true
+    }
   const has = (ref: string): boolean => specs.some((x) => x.referenceName === ref)
   const saveTags = (tags: string[]): Promise<void> => save({ 'System.Tags': tags.length ? joinTags(tags) : null }, 'Tags saved')
   const people = async (): Promise<Choice[]> =>
@@ -326,14 +337,15 @@ export function ItemDrawer({ id, onClose }: { id: number; onClose: () => void })
               />
             </label>
 
-            <section>
-              <div className="section-title">Description</div>
-              <Html html={item.description} />
-              {item.acceptanceCriteria && (
-                <>
-                  <div className="section-title" style={{ marginTop: 14 }}>Acceptance criteria</div>
-                  <Html html={item.acceptanceCriteria} />
-                </>
+            <section className="stack" style={{ gap: 14 }}>
+              <RichField label="Description" html={item.description} itemId={id} onSave={saveRich('System.Description')} />
+              {(item.acceptanceCriteria || has('Microsoft.VSTS.Common.AcceptanceCriteria')) && (
+                <RichField
+                  label="Acceptance criteria"
+                  html={item.acceptanceCriteria}
+                  itemId={id}
+                  onSave={saveRich('Microsoft.VSTS.Common.AcceptanceCriteria')}
+                />
               )}
             </section>
 
