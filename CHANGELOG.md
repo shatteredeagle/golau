@@ -2,6 +2,11 @@
 
 What changed in each Golau release, for the people using it. The release workflow publishes the section for each version as its release notes, so every version needs one here before it's tagged.
 
+## 0.3.7
+
+### Fixed
+- **The parent now shows in the card panel.** Golau read the parent from a field that Azure DevOps doesn't reliably send when a single card is opened or refreshed, so a parent could look empty (or vanish after you set it). It now reads the Parent link itself, which is what Azure DevOps stores. F5 and the panel's refresh button pick up a parent changed in Azure DevOps.
+
 ## 0.3.6
 
 ### New

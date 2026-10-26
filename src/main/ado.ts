@@ -12,7 +12,7 @@ import type {
   WorkItem
 } from '../shared/types'
 import { isTimeEstimate } from '../shared/fields'
-import { levelsFromCategories, parentLink, parentPatch, type Relation, type TypeLevels } from '../shared/parent'
+import { levelsFromCategories, parentIdOf, parentLink, parentPatch, type Relation, type TypeLevels } from '../shared/parent'
 
 const API = 'api-version=7.1'
 const COMMENTS_API = 'api-version=7.1-preview.4'
@@ -406,12 +406,14 @@ export class AdoClient {
     return this.mapItems(out)
   }
 
+  /** One card, read fresh. The parent comes from the Parent link: a plain GET doesn't reliably carry System.Parent. */
   async getItem(id: number): Promise<WorkItem> {
     assertId(id)
-    const r = await this.req<{ id: number; rev: number; fields: Record<string, unknown> }>(
-      `${this.org}/_apis/wit/workitems/${id}?${API}`
+    const r = await this.req<{ id: number; rev: number; fields: Record<string, unknown>; relations?: Relation[] }>(
+      `${this.org}/_apis/wit/workitems/${id}?$expand=relations&${API}`
     )
     const [item] = await this.mapItems([r])
+    item.parentId = parentIdOf(r.relations) ?? item.parentId
     return item
   }
 
@@ -467,13 +469,8 @@ export class AdoClient {
     return this.getItems(ids)
   }
 
-  async getDetails(id: number): Promise<WorkItem> {
-    assertId(id)
-    const r = await this.req<{ id: number; rev: number; fields: Record<string, unknown> }>(
-      `${this.org}/_apis/wit/workitems/${id}?${API}`
-    )
-    const [item] = await this.mapItems([r])
-    return item
+  getDetails(id: number): Promise<WorkItem> {
+    return this.getItem(id)
   }
 
   async getComments(id: number, project = this.cfg.project): Promise<Comment[]> {

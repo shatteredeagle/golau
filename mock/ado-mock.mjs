@@ -360,7 +360,10 @@ http
           Object.assign(it, trial)
         }
         const { relations, ...plain } = it
-        return json(res, 200, url.searchParams.get('$expand') === 'relations' ? it : plain)
+        // like ADO's plain GET: no relations, and no System.Parent unless relations are expanded (only the link says who the parent is)
+        if (url.searchParams.get('$expand') === 'relations') return json(res, 200, it)
+        const { 'System.Parent': _p, ...fieldsNoParent } = plain.fields
+        return json(res, 200, { ...plain, fields: fieldsNoParent })
       }
       if (key === 'wit/workitemtypecategories')
         return json(res, 200, { value: [
