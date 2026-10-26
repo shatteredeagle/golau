@@ -1,10 +1,32 @@
+<div align="center">
+
+<img src="build/icon.png" width="96" alt="Golau icon">
+
 # Golau
 
-*Golau* (Welsh, "GOL-eye") means **light**. Formerly called Tasklight; upgrading from it keeps your settings.
+**A focus companion for Azure DevOps, built for an ADHD brain.**
 
-A desktop companion for Azure DevOps boards, built for an ADHD brain: it keeps one card "in focus", times it, nudges gently, and makes keeping cards updated a 3-minute habit instead of a chore.
+*Golau* (Welsh, "GOL-eye") means **light**. Formerly Tasklight; upgrading keeps your settings.
 
-Runs locally (Electron). Windows is the main target; Linux works too. Your PAT is encrypted with the OS keystore (DPAPI on Windows) and only ever talks to `dev.azure.com`.
+[![Release](https://img.shields.io/github/v/release/shatteredeagle/golau?color=2dd4bf&label=release)](../../releases)
+[![CI](https://img.shields.io/github/actions/workflow/status/shatteredeagle/golau/ci.yml?label=CI)](../../actions/workflows/ci.yml)
+[![License: GPL v3+](https://img.shields.io/badge/license-GPL--3.0--or--later-blue)](LICENSE)
+![Platform](https://img.shields.io/badge/Windows-main%20target-0078d4)
+![Telemetry](https://img.shields.io/badge/telemetry-none-success)
+
+[Install](#install-windows) · [What it does](#what-it-does) · [Security](#security) · [Develop](#develop)
+
+<img src="docs/screenshots/today.png" alt="Golau's Today screen: the focused card with a timer, today's plan, wins, unplanned work and the brain dump" width="880">
+
+</div>
+
+## Why
+
+Boards go stale because updating them is a chore at exactly the moment you're deep in something else. Golau keeps **one card in focus**, times it, nudges gently, and turns keeping cards updated into a 3-minute habit instead of a guilt pile.
+
+- Runs **locally** (Electron). Windows is the main target; Linux works too.
+- Your PAT is encrypted with the OS keystore (DPAPI on Windows) and only ever talks to `dev.azure.com`.
+- No telemetry, no accounts, no cloud. Free software (GPL-3.0-or-later).
 
 ## Install (Windows)
 
@@ -18,7 +40,7 @@ Settings → *Start with Windows* makes it launch to the tray at login.
 
 ## What it does
 
-| | |
+| Feature | What you get |
 |---|---|
 | **Focus** | One card at a time, big timer, "where I left off" note that greets you when you come back. Floating always-on-top focus bar. |
 | **Unplanned work** | Just type what you're doing. After 20 min it asks (once) if there's a card for it, with suggestions. Link it, make one, or say no card needed; time moves to the card. |
@@ -28,16 +50,38 @@ Settings → *Start with Windows* makes it launch to the tray at login.
 | **Wrap up** | End of day, card by card: state, a quick update (chips for common ones), log hours, a note for tomorrow-you. Then sort the unplanned stuff. |
 | **Away / breaks** | Timer pauses on idle, lock or sleep, and asks to resume when you're back. Suggests a break after 90 min straight. |
 | **Brain dump** | `Ctrl+Alt+Space` anywhere: Enter parks a thought in the inbox, Ctrl+Enter starts tracking it. |
-| **Board, search, create** | My work as columns with inline state changes; search everything (title/#id, type, state, assignee, all projects); create items with parent, tags, sprint, estimate. |
+| **Board, search, create** | My work as columns with inline state changes; search everything (title/#id, type, state, assignee, all projects); create items with parent, tags, sprint, estimate; set, change or remove a card's parent from its panel (search by type, this project or all). |
 | **BUSY Bar** | Optional: shows the focused card + timer on the Bar's front display (priority below Home Assistant so meeting text wins). |
+
+### Tour
+
+<table>
+<tr>
+<td width="50%"><img src="docs/screenshots/board.png" alt="My work board using your team's ADO columns"><br><sub><b>Board.</b> Your team's real ADO columns; drag a card to change its state.</sub></td>
+<td width="50%"><img src="docs/screenshots/wrap-up.png" alt="End of day wrap up, card by card"><br><sub><b>Wrap up.</b> State, a quick update, hours and a note for tomorrow-you.</sub></td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/screenshots/search.png" alt="Search across projects"><br><sub><b>Search.</b> Title or #id, type, state, assignee, all projects.</sub></td>
+<td width="50%"><img src="docs/screenshots/gone-quiet.png" alt="Review of cards that have gone quiet"><br><sub><b>Gone quiet.</b> Stale cards: still on it, back to to-do, or done.</sub></td>
+</tr>
+<tr>
+<td colspan="2"><img src="docs/screenshots/parent-picker.png" alt="Choosing a parent: type chips and a This project only box"><br><sub><b>Parent picker.</b> Search for a parent by type; the level ADO expects is ticked, the rest are one tap away.</sub></td>
+</tr>
+</table>
+
+<p align="center"><img src="docs/screenshots/nudge.png" alt="A nudge asking whether there is a card for what you are doing" width="360"><br><sub><b>Nudges</b> are small, one at a time, and always have a no-guilt "later".</sub></p>
 
 Nudges only fire in your work hours, never while you're idle, one at a time, and every one has a no-guilt "later". Tray → *Quiet for…* silences them for a focus block.
 
-Keys: `Ctrl+K` switch task · `Ctrl+N` new item · `/` search · `Esc` close.
+> **Keys:** `Ctrl+K` switch task · `Ctrl+N` new item · `/` search · `Ctrl+Alt+Space` brain dump · `Esc` close
 
 ## Security
 
-Built to be safe on a work machine:
+Built to be safe on a work machine. In short: the token never leaves Azure DevOps, the UI has no network, and work-item HTML is treated as hostile.
+
+<details open>
+<summary><b>Full list</b></summary>
+
 
 - **Token:** stored only encrypted (Windows DPAPI via Electron safeStorage); if no OS key store exists it stays in memory. It's only ever sent to `https://dev.azure.com/<org>` or `https://<org>.visualstudio.com`, redirects aren't followed, and it's never logged.
 - **Untrusted work item HTML** (descriptions, comments by other people) is sanitized with DOMPurify: scripts, iframes, SVG, forms and inline styles are stripped, links survive only as absolute `http(s)` URLs that open in your browser, and images become `[image]` links so nothing is fetched (no tracking pixels, no `\\host\share` paths that would leak Windows credentials).
@@ -47,6 +91,8 @@ Built to be safe on a work machine:
 - **Updates:** only from this repository's GitHub releases over HTTPS, only newer non-prerelease versions, downloads only from GitHub hosts, size-capped, and the installer must match the release's `SHA256SUMS.txt` before it runs. It runs as you (per-user, no admin) and upgrades in place. Releases aren't code-signed, so this guards against corruption and tampering in transit, not against a compromised GitHub account.
 - **Data:** `state.json`/`settings.json` are written atomically (fsync + rename) with a `.bak`; after a crash or forced reboot the running timer is cut off at the last minute the app was alive instead of counting the downtime.
 - Not code-signed: SmartScreen warns, and a locked-down laptop (AppLocker/WDAC) may refuse to run unsigned apps.
+
+</details>
 
 ## Develop
 
@@ -61,26 +107,32 @@ npm run dist:win # dist/Golau-<version>-win.zip (builds from Linux; rcedit runs 
 
 Data lives in `%APPDATA%\Golau` (`settings.json`, `state.json`, `secrets.bin`). `GOLAU_DATA` overrides it when running from source (ignored in the packaged app).
 
-### CI and releases
+<details>
+<summary><b>CI and releases</b></summary>
 
 - **CI** (`.github/workflows/ci.yml`, every push/PR): typecheck, tests, audit of shipped deps, an offscreen run of every screen against the mock (screenshots uploaded as an artifact; fails if the hostile-HTML check finds anything), and a Windows installer build with a fuse check and a real install/launch/uninstall test (setup exe uploaded as a 7-day artifact).
 - **Release** (`.github/workflows/release.yml`): builds the per-user installer, installs/launches/uninstalls it on a Windows runner as a test, then publishes. Bump `version` in `package.json`, commit, then
 
   ```bash
-  git tag v0.2.0 && git push origin v0.2.0
+  git tag vX.Y.Z && git push origin vX.Y.Z
   ```
 
-  The tag must match `package.json`. It builds natively on Windows, verifies fuses, and publishes a GitHub Release with the setup exe and `SHA256SUMS.txt`. A hyphenated tag (`v0.2.0-beta.1`) becomes a prerelease.
+  The tag must match `package.json`. It builds natively on Windows, verifies fuses, and publishes a GitHub Release with the setup exe and `SHA256SUMS.txt`. A hyphenated tag (`vX.Y.Z-beta.1`) becomes a prerelease.
 
 Actions are pinned to commit SHAs; the job that can write to the repo runs no project code.
 
-### Layout
+</details>
+
+<details>
+<summary><b>Layout</b></summary>
 
 - `src/main/ado.ts`: Azure DevOps REST client (WIQL, batch, comments, create, update)
 - `src/main/tracker.ts`: the local journal: focus, sessions, unplanned work, inbox, plans
 - `src/main/scheduler.ts`: when to nudge (tested in `test/scheduler.test.mts`)
 - `src/main/busybar.ts`: BUSY Bar display
 - `src/renderer/src/views/*`: screens; `surfaces.tsx`: nudge card, focus bar, capture box
+
+</details>
 
 ## Code signing policy
 

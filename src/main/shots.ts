@@ -186,6 +186,97 @@ export async function runShots(d: ShotDeps, dir: string): Promise<void> {
   await snap(d.main(), '05a-item-estimate')
   await esc()
 
+  // parent picker: a story (4114) gets a parent. Chips default to the level above; the project toggle widens the search.
+  const parentDd = `[...document.querySelectorAll('.drawer dl.props dt')].find((x) => x.textContent === 'Parent')?.nextElementSibling`
+  const pickerIds = (): Promise<number[]> => js(`[...document.querySelectorAll('.modal .pick .mono')].map((x) => Number(x.textContent))`) as Promise<number[]>
+  const clickIn = (sel: string, text: string): Promise<unknown> =>
+    js(`[...document.querySelectorAll(${JSON.stringify(sel)})].find((x) => x.textContent.trim() === ${JSON.stringify(text)})?.click()`)
+  const parentOf = (id: number): Promise<number | undefined> => js(`window.tl.call('getItem', ${id}).then((i) => i.parentId)`) as Promise<number | undefined>
+  const openParentPicker = async (): Promise<void> => {
+    await js(`(${parentDd})?.querySelector('button')?.click()`)
+    await wait(1500)
+  }
+  await route({ view: 'item', id: 4114 })
+  await wait(1200)
+  const noParent = await js(`(${parentDd})?.textContent ?? 'missing'`)
+  await openParentPicker()
+  const onChips = (await js(`[...document.querySelectorAll('.modal .chip.on')].map((x) => x.textContent)`)) as string[]
+  const allChips = (await js(`[...document.querySelectorAll('.modal .chip')].map((x) => x.textContent)`)) as string[]
+  const first = await pickerIds()
+  await snap(d.main(), '05c-parent-picker')
+  await js(`document.querySelector('.modal input[type=checkbox]')?.click()`)
+  await wait(1500)
+  const wide = await pickerIds()
+  await clickIn('.modal .chip', 'Epic')
+  await wait(1500)
+  const withEpics = await pickerIds()
+  await snap(d.main(), '05d-parent-picker-wide')
+  // a story under an Epic: Azure DevOps refuses, the card keeps no parent and the reason is shown
+  await js(`[...document.querySelectorAll('.modal .pick')].find((x) => x.textContent.includes('Self-service onboarding'))?.click()`)
+  await wait(1500)
+  const refused = (await js(`document.querySelector('.toast.error')?.textContent ?? ''`)) as string
+  const stillNone = (await parentOf(4114)) === undefined
+  // a valid parent
+  await openParentPicker()
+  await js(`[...document.querySelectorAll('.modal .pick')].find((x) => x.textContent.includes('SSO session timeouts'))?.click()`)
+  await wait(1500)
+  const set = (await parentOf(4114)) === 4130
+  const shownParent = (await js(`(${parentDd})?.textContent ?? ''`)) as string
+  await snap(d.main(), '05e-item-parent')
+  // replace it: the current parent is not offered; the old link is removed in the same request
+  await openParentPicker()
+  const offered = await pickerIds()
+  await js(`[...document.querySelectorAll('.modal .pick')].find((x) => x.textContent.includes('SSO for partner portal'))?.click()`)
+  await wait(1500)
+  const replaced = (await parentOf(4114)) === 4101
+  // Esc closes only the picker, then the ✕ removes the parent
+  await openParentPicker()
+  await esc()
+  await wait(300)
+  const escOk = (await js(`!document.querySelector('.modal') && !!document.querySelector('.drawer')`)) === true
+  await js(`(${parentDd})?.querySelector('button[title="Remove the parent link"]')?.click()`)
+  await wait(1500)
+  const removed = (await parentOf(4114)) === undefined
+  console.log('parent-check', JSON.stringify({ noParent, onChips, allChips, first, wide, withEpics, refused, stillNone, set, shownParent, offered, replaced, escOk, removed }))
+  const has = (a: number[], ...ids: number[]): boolean => ids.every((i) => a.includes(i))
+  const lacks = (a: number[], ...ids: number[]): boolean => ids.every((i) => !a.includes(i))
+  if (
+    !/none/.test(String(noParent)) ||
+    onChips.join() !== 'Feature' ||
+    allChips.join() !== 'Bug,Product Backlog Item,User Story,Feature,Epic' ||
+    !has(first, 4101, 4130, 4131) ||
+    !lacks(first, 4100, 4114, 4116, 4132, 4133) ||
+    !has(wide, 4116) ||
+    !lacks(wide, 4132) ||
+    !has(withEpics, 4100, 4132) ||
+    !/circular|cannot be the parent/.test(refused) ||
+    !stillNone ||
+    !set ||
+    !/4130/.test(shownParent) ||
+    !lacks(offered, 4130) ||
+    !has(offered, 4101) ||
+    !replaced ||
+    !escOk ||
+    !removed
+  ) {
+    console.error('PARENT CHECK FAILED')
+    failed = true
+  }
+  // a card that already breaks a rule (the mock PBI has no Customer): re-parenting asks for it, like any other edit
+  await route({ view: 'item', id: 4110 })
+  await wait(1200)
+  await openParentPicker()
+  await js(`[...document.querySelectorAll('.modal .pick')].find((x) => x.textContent.includes('SSO session timeouts'))?.click()`)
+  await wait(1500)
+  const needsFields = /needs a bit more/.test(String(await js(`document.querySelector('.modal h2')?.textContent ?? ''`)))
+  await snap(d.main(), '05f-parent-needs-fields')
+  if (!needsFields) {
+    console.error('PARENT CHECK FAILED: no required-fields prompt when re-parenting a card with a rule error')
+    failed = true
+  }
+  await esc()
+  await esc()
+
   // security check: hostile work item HTML must come out inert
   const ids = (await d.main()?.webContents.executeJavaScript(
     `window.tl.call('search', { text: 'Hostile', status: 'any', assigned: 'anyone' }).then(r => r.map(i => i.id))`

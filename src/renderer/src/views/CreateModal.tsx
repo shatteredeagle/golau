@@ -247,6 +247,7 @@ export function CreateModal({ route, onClose }: { route: Extract<Route, { view: 
       {pickingParent && (
         <PickModal
           title="Choose a parent"
+          parentFor={{ type }}
           onClose={() => setPickingParent(false)}
           onPick={(item) => {
             setParentId(item.id)

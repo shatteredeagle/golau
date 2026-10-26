@@ -12,6 +12,7 @@ import type {
   WorkItem
 } from '../shared/types'
 import { isTimeEstimate } from '../shared/fields'
+import { levelsFromCategories, parentLink, parentPatch, type Relation, type TypeLevels } from '../shared/parent'
 
 const API = 'api-version=7.1'
 const COMMENTS_API = 'api-version=7.1-preview.4'
@@ -137,6 +138,7 @@ const assertField = (name: string): string => {
 export class AdoClient {
   private me?: Person
   private types = new Map<string, TypeInfo[]>() // by project
+  private levels = new Map<string, TypeLevels>() // by project
   private fieldKinds = new Map<string, Map<string, { kind: FieldKind; readOnly: boolean; name: string }>>() // by project
   private typeFieldCache = new Map<string, FieldSpec[]>() // project|type
   private extraFieldsOk = true
@@ -495,18 +497,40 @@ export class AdoClient {
     })
   }
 
-  /** fields: ADO reference name → value (null removes) */
-  async updateItem(id: number, fields: Record<string, unknown>): Promise<WorkItem> {
+  /**
+   * fields: ADO reference name → value (null removes). `parent` (a card id, or null to remove) goes in the same PATCH,
+   * so a refused link or a rule error leaves the old parent and every field as they were.
+   */
+  async updateItem(id: number, fields: Record<string, unknown>, parent?: number | null): Promise<WorkItem> {
     assertId(id)
-    const ops = Object.entries(fields).map(([k, v]) =>
+    const ops: unknown[] = Object.entries(fields).map(([k, v]) =>
       v === null ? { op: 'remove', path: `/fields/${assertField(k)}` } : { op: 'add', path: `/fields/${assertField(k)}`, value: v }
     )
-    await this.req(`${this.org}/_apis/wit/workitems/${id}?${API}`, {
+    const url = `${this.org}/_apis/wit/workitems/${id}`
+    if (parent !== undefined) {
+      if (parent !== null) assertId(parent)
+      const cur = await this.req<{ id: number; rev: number; relations?: Relation[] }>(`${url}?$expand=relations&${API}`)
+      ops.unshift(...parentPatch(this.org, cur, parent))
+    }
+    if (!ops.length) return this.getItem(id)
+    await this.req(`${url}?${API}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json-patch+json' },
       body: JSON.stringify(ops)
     })
     return this.getItem(id)
+  }
+
+  /** Backlog level of every type in the project (task < requirement < feature < epic), for the parent picker. */
+  async getTypeLevels(project = this.cfg.project): Promise<TypeLevels> {
+    const cached = this.levels.get(project)
+    if (cached) return cached
+    const data = await this.req<{ value: { referenceName: string; workItemTypes?: { name: string }[] }[] }>(
+      `${this.projectUrl(project)}/_apis/wit/workitemtypecategories?${API}`
+    )
+    const levels = levelsFromCategories(data.value)
+    this.levels.set(project, levels)
+    return levels
   }
 
   async assignToMe(id: number): Promise<WorkItem> {
@@ -603,12 +627,7 @@ export class AdoClient {
       ops.push({ op: 'add', path: `/fields/${assertField(k)}`, value: v })
     }
     if (input.parentId) assertId(input.parentId)
-    if (input.parentId)
-      ops.push({
-        op: 'add',
-        path: '/relations/-',
-        value: { rel: 'System.LinkTypes.Hierarchy-Reverse', url: `${this.org}/_apis/wit/workItems/${input.parentId}` }
-      })
+    if (input.parentId) ops.push({ op: 'add', path: '/relations/-', value: parentLink(this.org, input.parentId) })
     const r = await this.req<{ id: number }>(
       `${this.projectUrl()}/_apis/wit/workitems/$${encodeURIComponent(input.type)}?${API}`,
       { method: 'POST', headers: { 'Content-Type': 'application/json-patch+json' }, body: JSON.stringify(ops) }

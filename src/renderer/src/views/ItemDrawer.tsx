@@ -5,6 +5,7 @@ import { ago, fmtDur, itemTotal, todayTotals } from '@shared/time'
 import { call } from '../api'
 import { FocusButton, Html, OpenInAdo, StaleBadge, TypeChip, useApp } from '../components'
 import { FieldEditor, timeEstimateSpec } from '../fields'
+import { PickModal } from './PickModal'
 
 export function ItemDrawer({ id, onClose }: { id: number; onClose: () => void }): ReactNode {
   const { types, state, toast, go, openItem, updateItem } = useApp()
@@ -15,6 +16,7 @@ export function ItemDrawer({ id, onClose }: { id: number; onClose: () => void })
   const [update, setUpdate] = useState('')
   const [posting, setPosting] = useState(false)
   const [estimateSpec, setEstimateSpec] = useState<FieldSpec>()
+  const [pickingParent, setPickingParent] = useState(false)
 
   const load = async (): Promise<void> => {
     try {
@@ -45,6 +47,9 @@ export function ItemDrawer({ id, onClose }: { id: number; onClose: () => void })
     setItem({ ...it, description: item?.description, acceptanceCriteria: item?.acceptanceCriteria })
     if (msg) toast(msg)
   }
+
+  const setParent = (parentId: number | null): Promise<void> =>
+    save({ $parent: parentId }, parentId === null ? 'Parent removed' : `Parent set to #${parentId}`)
 
   const post = async (): Promise<void> => {
     if (!update.trim() || !item) return
@@ -149,16 +154,24 @@ export function ItemDrawer({ id, onClose }: { id: number; onClose: () => void })
                   <dd className="ellipsis">{item.iterationPath}</dd>
                 </>
               )}
-              {item.parentId && (
-                <>
-                  <dt>Parent</dt>
-                  <dd>
-                    <a href="#" onClick={(e) => { e.preventDefault(); openItem(item.parentId!) }}>
-                      #{item.parentId} {state.titles[item.parentId]?.title ?? ''}
-                    </a>
-                  </dd>
-                </>
-              )}
+              <dt>Parent</dt>
+              <dd className="row">
+                {item.parentId ? (
+                  <a href="#" className="ellipsis" onClick={(e) => { e.preventDefault(); openItem(item.parentId!) }}>
+                    #{item.parentId} {state.titles[item.parentId]?.title ?? ''}
+                  </a>
+                ) : (
+                  <span className="faint">none</span>
+                )}
+                <button className="btn sm" onClick={() => setPickingParent(true)}>
+                  {item.parentId ? 'Change' : 'Add parent'}
+                </button>
+                {item.parentId && (
+                  <button className="btn sm" title="Remove the parent link" onClick={() => void setParent(null)}>
+                    <X size={12} />
+                  </button>
+                )}
+              </dd>
               {item.tags.length > 0 && (
                 <>
                   <dt>Tags</dt>
@@ -265,6 +278,17 @@ export function ItemDrawer({ id, onClose }: { id: number; onClose: () => void })
           </>
         )}
       </div>
+      {pickingParent && item && (
+        <PickModal
+          title="Choose a parent"
+          parentFor={{ type: item.type, itemId: id, currentParentId: item.parentId }}
+          onClose={() => setPickingParent(false)}
+          onPick={async (p) => {
+            setPickingParent(false)
+            await setParent(p.id)
+          }}
+        />
+      )}
     </aside>
   )
 }

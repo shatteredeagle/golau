@@ -2,6 +2,14 @@
 
 What changed in each Golau release, for the people using it. The release workflow publishes the section for each version as its release notes, so every version needs one here before it's tagged.
 
+## 0.3.5
+
+### New
+- **Set, change or remove a card's parent.** The Parent row in the card panel now has *Add parent* / *Change* and a ✕ to remove it. The picker searches Azure DevOps for the parent, with type chips (Product Backlog Item, Feature, Epic and so on) and a *This project only* box (on by default; untick it to look across all projects). The chips start on the level Azure DevOps expects, one above the card; the others are dimmed but one tap away. The card itself and its current parent are left out. Changing a parent is one request, so if Azure DevOps refuses the link (wrong level, a loop) the old parent stays and you see why. Creating a card uses the same picker.
+
+### Notes
+- If the card already breaks a rule in your process (a required field is empty), re-parenting asks for the missing field first, like any other edit.
+
 ## 0.3.4
 
 ### Changed

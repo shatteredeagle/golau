@@ -117,6 +117,11 @@ let nextId = 4100
 const items = new Map()
 const comments = new Map()
 
+const parentRel = (id) => ({ rel: 'System.LinkTypes.Hierarchy-Reverse', url: `http://localhost:${PORT}/${ORG}/_apis/wit/workItems/${id}`, attributes: { name: 'Parent' } })
+// backlog level per type, like ADO's work item type categories (task < requirement < feature < epic)
+const LEVEL = { Task: 0, Bug: 1, 'User Story': 1, 'Product Backlog Item': 1, Feature: 2, Epic: 3 }
+const linkError = (res, _code, msg) => json(res, 400, { message: msg, typeKey: 'WorkItemLinkValidationException', errorCode: 0, eventId: 3200 })
+
 function add(type, title, state, opts = {}) {
   const id = nextId++
   const f = {
@@ -142,7 +147,7 @@ function add(type, title, state, opts = {}) {
     f['Microsoft.VSTS.Scheduling.RemainingWork'] = opts.remaining ?? 4
     f['Microsoft.VSTS.Scheduling.CompletedWork'] = opts.completed ?? 0
   }
-  items.set(id, { id, rev: 1, fields: f })
+  items.set(id, { id, rev: 1, fields: f, relations: opts.parent ? [parentRel(opts.parent)] : [] })
   comments.set(id, opts.comments ?? [])
   return id
 }
@@ -175,6 +180,11 @@ add('Bug', 'Typo in password reset email', 'New', { assigned: OTHERS[0], changed
 add('Feature', 'Billing v2', 'New', { assigned: OTHERS[1], changed: 20, project: 'Billing' })
 add('Task', 'Spike: evaluate Stripe tax', 'Active', { project: 'Billing', changed: 9, stateChanged: 9 })
 for (let i = 0; i < 12; i++) add('Task', `Backlog chore #${i + 1}: tidy config ${i}`, 'New', { assigned: i % 2 ? null : OTHERS[0], changed: 15 + i })
+// parent picker data: more Features/Epics to search, one in Billing, one closed (appended so earlier ids stay put)
+add('Feature', 'SSO session timeouts', 'New', { assigned: OTHERS[1], parent: epic, changed: 3 })
+add('Feature', 'Audit and compliance', 'Active', { assigned: null, changed: 6 })
+add('Epic', 'Billing platform', 'Active', { assigned: OTHERS[0], changed: 12, project: 'Billing' })
+add('Feature', 'Legacy SSO retirement', 'Closed', { assigned: OTHERS[1], changed: 30 })
 
 const json = (res, code, body) => {
   res.writeHead(code, { 'Content-Type': 'application/json' })
@@ -211,6 +221,31 @@ const body = (req) =>
     req.on('end', () => ok(b ? JSON.parse(b) : {}))
   })
 
+// like ADO's link rules: the test op, an existing parent, a parent that exists, one level up, no loops
+function relationErrors(it, ops) {
+  let parent = it.fields['System.Parent']
+  for (const op of ops) {
+    if (op.op === 'test' && op.path === '/rev' && op.value !== it.rev) return `TF401028: The updated value for the field 'Rev' does not match the current revision (${it.rev}).`
+    if (op.op === 'remove' && op.path.startsWith('/relations/')) {
+      if (!it.relations[Number(op.path.slice(11))]) return `Relation index ${op.path.slice(11)} does not exist on work item ${it.id}.`
+      if (it.relations[Number(op.path.slice(11))].rel === 'System.LinkTypes.Hierarchy-Reverse') parent = undefined
+    }
+    if (op.path === '/relations/-' && op.value?.rel === 'System.LinkTypes.Hierarchy-Reverse') {
+      const pid = Number(op.value.url.split('/').pop())
+      const p = items.get(pid)
+      if (!p) return `TF401232: Work item ${pid} does not exist, or you do not have permissions to read it.`
+      if (parent) return `TF201036: You cannot add a Parent link between work items ${it.id} and ${pid} because a work item can have only one Parent link.`
+      if (pid === it.id) return `TF201036: You cannot add a Parent link between work items ${it.id} and ${pid} because a work item cannot be linked to itself.`
+      for (let a = p; a; a = items.get(a.fields['System.Parent']))
+        if (a.id === it.id) return `TF201035: You cannot add a Parent link between work items ${it.id} and ${pid} because it would create a circular link.`
+      const [cl, pl] = [LEVEL[it.fields['System.WorkItemType']], LEVEL[p.fields['System.WorkItemType']]]
+      if (cl !== undefined && pl !== undefined && pl !== cl + 1 && !(cl === 0 && pl === 1))
+        return `TF201036: You cannot add a Parent link between work items ${it.id} and ${pid}: a ${p.fields['System.WorkItemType']} cannot be the parent of a ${it.fields['System.WorkItemType']}.`
+    }
+  }
+  return ''
+}
+
 function applyPatch(it, ops) {
   for (const op of ops) {
     if (op.path.startsWith('/fields/')) {
@@ -223,7 +258,11 @@ function applyPatch(it, ops) {
         if (k === 'System.State' && it.fields[k] !== op.value) it.fields['Microsoft.VSTS.Common.StateChangeDate'] = new Date().toISOString()
         it.fields[k] = op.value
       }
+    } else if (op.op === 'remove' && op.path.startsWith('/relations/')) {
+      const [gone] = it.relations.splice(Number(op.path.slice(11)), 1)
+      if (gone?.rel === 'System.LinkTypes.Hierarchy-Reverse') delete it.fields['System.Parent']
     } else if (op.path === '/relations/-' && op.value.rel === 'System.LinkTypes.Hierarchy-Reverse') {
+      it.relations.push(parentRel(Number(op.value.url.split('/').pop())))
       it.fields['System.Parent'] = Number(op.value.url.split('/').pop())
     }
   }
@@ -311,14 +350,25 @@ http
         if (!it) return json(res, 404, { message: `TF401232: Work item ${api[2]} does not exist.` })
         if (req.method === 'PATCH') {
           const trial = structuredClone(it)
-          applyPatch(trial, await body(req))
+          const ops = await body(req)
+          const bad = relationErrors(trial, ops)
+          if (bad) return linkError(res, 0, bad)
+          applyPatch(trial, ops)
           const errs = ruleErrors(trial)
           // message-only error (no customProperties) to exercise the app's fallback parser
           if (errs.length) return ruleErrorResponse(res, errs, false)
           Object.assign(it, trial)
         }
-        return json(res, 200, it)
+        const { relations, ...plain } = it
+        return json(res, 200, url.searchParams.get('$expand') === 'relations' ? it : plain)
       }
+      if (key === 'wit/workitemtypecategories')
+        return json(res, 200, { value: [
+          { referenceName: 'Microsoft.EpicCategory', workItemTypes: [{ name: 'Epic' }] },
+          { referenceName: 'Microsoft.FeatureCategory', workItemTypes: [{ name: 'Feature' }] },
+          { referenceName: 'Microsoft.RequirementCategory', workItemTypes: [{ name: 'User Story' }, { name: 'Product Backlog Item' }, { name: 'Bug' }] },
+          { referenceName: 'Microsoft.TaskCategory', workItemTypes: [{ name: 'Task' }] }
+        ] })
       if (key === 'work/backlogs' && scope[1])
         return json(res, 200, { value: [
           { id: 'Microsoft.EpicCategory', name: 'Epics', type: 'portfolio', rank: 3 },

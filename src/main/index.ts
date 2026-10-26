@@ -464,11 +464,18 @@ const api = {
     await guarded(() => client().addComment(id, toHtml(text), project))
     tracker.addWin({ itemId: id, title: tracker.s.titles[id]?.title ?? `#${id}`, kind: 'commented' })
   },
+  /** `fields.$parent`: a card id (or null) to make the card's parent, applied together with the other fields. */
   updateItem: async (id: number, fields: Record<string, unknown>): Promise<Mutation<WorkItem>> => {
+    const { $parent, ...plain } = fields
+    if ($parent !== undefined && $parent !== null) assertId($parent)
     const before = workCache.find((x) => x.id === id) ?? (await guarded(() => client().getItem(id)))
     try {
-      const item = await guarded(async () => client().updateItem(id, await normalizeFields(before.type, before.project, fields)))
+      const item = await guarded(async () => client().updateItem(id, await normalizeFields(before.type, before.project, plain), $parent as number | null | undefined))
       touchCache(item)
+      if (typeof $parent === 'number') {
+        const parent = await guarded(() => client().getItem($parent)).catch(() => undefined)
+        if (parent) tracker.cacheTitle(parent.id, parent.title, parent.type, parent.state)
+      }
       if (item.category === 'Completed' && before.category !== 'Completed') {
         tracker.addWin({ itemId: id, title: item.title, kind: 'closed' })
         if (tracker.s.focus?.itemId === id) tracker.stop()
@@ -478,6 +485,7 @@ const api = {
       return asMutationError(e, before.type, before.project)
     }
   },
+  typeLevels: (project?: string) => guarded(() => client().getTypeLevels(project)),
   typeFields: (type: string, project?: string) => guarded(() => client().typeFields(type, project)),
   assignToMe: async (id: number) => {
     const item = await guarded(() => client().assignToMe(id))
