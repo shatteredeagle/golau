@@ -111,6 +111,12 @@ function ruleErrorResponse(res, errs, withCustomProperties) {
   })
 }
 
+const ITERATIONS = [
+  { name: 'Sprint 41', path: 'Platform\\Sprint 41', attributes: { startDate: '2026-10-05T00:00:00Z', timeFrame: 'past' } },
+  { name: 'Sprint 42', path: 'Platform\\Sprint 42', attributes: { startDate: '2026-10-19T00:00:00Z', timeFrame: 'current' } },
+  { name: 'Sprint 43', path: 'Platform\\Sprint 43', attributes: { startDate: '2026-11-02T00:00:00Z', timeFrame: 'future' } }
+]
+const AREAS = ['Platform', 'Platform\\Core', 'Platform\\Core\\Auth', 'Platform\\Reporting']
 const day = 864e5
 const iso = (daysAgo) => new Date(Date.now() - daysAgo * day).toISOString()
 let nextId = 4100
@@ -296,7 +302,12 @@ http
       if (key === 'connectionData')
         return json(res, 200, { authenticatedUser: { id: ME.id, providerDisplayName: ME.displayName, properties: { Account: { $value: ME.uniqueName } } } })
       if (key === 'projects') return json(res, 200, { value: [{ name: 'Platform' }, { name: 'Billing' }] })
+      if (api[0] === 'projects' && api[2] === 'teams' && api[4] === 'members')
+        return json(res, 200, { count: 3, value: [ME, ...OTHERS].map((p, i) => ({ isTeamAdmin: i === 0, identity: { id: p.id ?? `p-${i}`, displayName: p.displayName, uniqueName: p.uniqueName } })) })
       if (api[0] === 'projects' && api[2] === 'teams') return json(res, 200, { value: [{ name: `${api[1]} Team` }, { name: 'Ops' }] })
+      if (key === 'wit/classificationnodes/iterations') return json(res, 200, { name: 'Platform', path: '\\Platform\\Iteration', children: ITERATIONS.map((i) => ({ name: i.name, path: `\\Platform\\Iteration\\${i.name}`, attributes: { startDate: i.attributes.startDate } })) })
+      if (key === 'wit/classificationnodes/areas') return json(res, 200, { name: 'Platform', path: '\\Platform\\Area', children: [{ name: 'Core', path: '\\Platform\\Area\\Core', children: [{ name: 'Auth', path: '\\Platform\\Area\\Core\\Auth' }] }, { name: 'Reporting', path: '\\Platform\\Area\\Reporting' }] })
+      if (key === 'wit/tags') return json(res, 200, { count: 4, value: ['api', 'auth', 'partner', 'reporting'].map((name, i) => ({ id: `t${i}`, name })) })
       if (key === 'wit/workitemtypes') return json(res, 200, { value: TYPES })
       if (key === 'wit/fields') return json(res, 200, { value: FIELDS })
       if (api[0] === 'wit' && api[1] === 'workitemtypes' && api[3] === 'fields') return json(res, 200, { value: typeFields(api[2]) })
@@ -351,6 +362,14 @@ http
         if (req.method === 'PATCH') {
           const trial = structuredClone(it)
           const ops = await body(req)
+          // like ADO: a path that is not in the project's tree is refused
+          for (const op of ops) {
+            const f = op.path?.slice(8)
+            if (op.op !== 'remove' && f === 'System.IterationPath' && !ITERATIONS.some((i) => i.path === op.value) && op.value !== 'Platform')
+              return linkError(res, 0, `TF401347: Invalid tree name given for work item ${it.id}, field 'System.IterationPath'.`)
+            if (op.op !== 'remove' && f === 'System.AreaPath' && !AREAS.includes(op.value))
+              return linkError(res, 0, `TF401347: Invalid tree name given for work item ${it.id}, field 'System.AreaPath'.`)
+          }
           const bad = relationErrors(trial, ops)
           if (bad) return linkError(res, 0, bad)
           applyPatch(trial, ops)
@@ -382,7 +401,7 @@ http
       if (api[0] === 'work' && api[1] === 'boards' && api[2] === 'Stories' && scope[1])
         return json(res, 200, { id: 'stories', name: 'Stories', columns: BOARD, fields: { columnField: { referenceName: BOARD_FIELD }, doneField: { referenceName: BOARD_FIELD.replace('Column', 'Column.Done') } } })
       if (key === 'work/teamsettings/iterations')
-        return json(res, 200, { value: [{ name: 'Sprint 42', path: 'Platform\\Sprint 42' }] })
+        return json(res, 200, { value: url.searchParams.get('$timeframe') === 'current' ? ITERATIONS.filter((i) => i.attributes.timeFrame === 'current') : ITERATIONS })
       return json(res, 404, { message: `mock: no route ${req.method} ${url.pathname}` })
     } catch (e) {
       return json(res, 400, { message: String(e) })

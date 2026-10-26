@@ -2,6 +2,16 @@
 
 What changed in each Golau release, for the people using it. The release workflow publishes the section for each version as its release notes, so every version needs one here before it's tagged.
 
+## 0.4.0
+
+### New
+- **Edit more of a card from its panel.** Change the **assignee** (search the team's members and recent assignees, or pick *Me* / *Unassigned*), the **iteration** (the team's sprints, current one first), the **area**, the **tags** (add with Enter or a comma, ✕ to remove, with suggestions from tags already in use) and the **priority**. **Remaining** and **Completed** hours show on any card that has them, even when empty, and clearing the box clears the field. Every change goes through the same path as before, so if Azure DevOps wants another field first it asks for it, and if it refuses a value you see its reason.
+- *Take it* now saves like any other edit.
+
+### Notes
+- The people list is the team's members plus whoever had work assigned recently. Searching the whole organisation would need extra permissions on your token (Graph / Identity), which Golau doesn't ask for. Pick a team in Settings for the full team list.
+- Description and Acceptance criteria are still read-only here; they're next.
+
 ## 0.3.8
 
 ### Fixed

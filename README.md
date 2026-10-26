@@ -50,7 +50,7 @@ Settings → *Start with Windows* makes it launch to the tray at login.
 | **Wrap up** | End of day, card by card: state, a quick update (chips for common ones), log hours, a note for tomorrow-you. Then sort the unplanned stuff. |
 | **Away / breaks** | Timer pauses on idle, lock or sleep, and asks to resume when you're back. Suggests a break after 90 min straight. |
 | **Brain dump** | `Ctrl+Alt+Space` anywhere: Enter parks a thought in the inbox, Ctrl+Enter starts tracking it. |
-| **Board, search, create** | My work as columns with inline state changes; search everything (title/#id, type, state, assignee, all projects); create items with parent, tags, sprint, estimate; set, change or remove a card's parent from its panel (search by type, this project or all). |
+| **Board, search, create** | My work as columns with inline state changes; search everything (title/#id, type, state, assignee, all projects); create items with parent, tags, sprint, estimate; edit assignee, sprint, area, tags, priority and hours from the card panel; set, change or remove a card's parent (search by type, this project or all). |
 | **BUSY Bar** | Optional: shows the focused card + timer on the Bar's front display (priority below Home Assistant so meeting text wins). |
 
 ### Tour

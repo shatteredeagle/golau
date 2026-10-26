@@ -485,6 +485,10 @@ const api = {
       return asMutationError(e, before.type, before.project)
     }
   },
+  people: () => guarded(() => client().getPeople()),
+  iterations: (project?: string) => guarded(() => client().getIterations(project)),
+  areas: (project?: string) => guarded(() => client().getAreas(project)),
+  tags: (project?: string) => guarded(() => client().getTags(project)),
   typeLevels: (project?: string) => guarded(() => client().getTypeLevels(project)),
   typeFields: (type: string, project?: string) => guarded(() => client().typeFields(type, project)),
   assignToMe: async (id: number) => {

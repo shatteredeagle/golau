@@ -6,6 +6,8 @@ import { call, REFRESH_EVENT } from '../api'
 import { FocusButton, Html, OpenInAdo, StaleBadge, TypeChip, useApp } from '../components'
 import { FieldEditor, timeEstimateSpec } from '../fields'
 import { PickModal } from './PickModal'
+import { ListPicker, type Choice } from './ListPicker'
+import { addTags, joinTags, numberOrNull } from '@shared/edit'
 
 export function ItemDrawer({ id, onClose }: { id: number; onClose: () => void }): ReactNode {
   const { types, state, toast, go, openItem, updateItem, refreshWork } = useApp()
@@ -17,6 +19,10 @@ export function ItemDrawer({ id, onClose }: { id: number; onClose: () => void })
   const [posting, setPosting] = useState(false)
   const [estimateSpec, setEstimateSpec] = useState<FieldSpec>()
   const [pickingParent, setPickingParent] = useState(false)
+  const [picker, setPicker] = useState<'assignee' | 'iteration' | 'area' | null>(null)
+  const [specs, setSpecs] = useState<FieldSpec[]>([])
+  const [tagIdeas, setTagIdeas] = useState<string[]>([])
+  const [tagText, setTagText] = useState('')
   const [refreshing, setRefreshing] = useState(false)
   const [parentTitle, setParentTitle] = useState<{ id: number; title: string }>()
 
@@ -25,8 +31,14 @@ export function ItemDrawer({ id, onClose }: { id: number; onClose: () => void })
       const it = await call('getItem', id)
       setItem(it)
       void call('typeFields', it.type, it.project)
-        .then((specs) => setEstimateSpec(timeEstimateSpec(specs)))
-        .catch(() => setEstimateSpec(undefined))
+        .then((s) => {
+          setSpecs(s)
+          setEstimateSpec(timeEstimateSpec(s))
+        })
+        .catch(() => {
+          setSpecs([])
+          setEstimateSpec(undefined)
+        })
       setComments(await call('getComments', id, it.project))
     } catch (e) {
       setError((e as Error).message)
@@ -78,9 +90,17 @@ export function ItemDrawer({ id, onClose }: { id: number; onClose: () => void })
   const save = async (fields: Record<string, unknown>, msg?: string): Promise<void> => {
     const it = await updateItem({ id, title: item?.title ?? `#${id}` }, fields)
     if (!it) return
-    setItem({ ...it, description: item?.description, acceptanceCriteria: item?.acceptanceCriteria })
+    setItem(it)
     if (msg) toast(msg)
   }
+
+  const has = (ref: string): boolean => specs.some((x) => x.referenceName === ref)
+  const saveTags = (tags: string[]): Promise<void> => save({ 'System.Tags': tags.length ? joinTags(tags) : null }, 'Tags saved')
+  const people = async (): Promise<Choice[]> =>
+    (await call('people')).map((p) => ({ key: p.email ?? p.name, label: p.name, sub: p.email }))
+  const sprints = async (): Promise<Choice[]> =>
+    (await call('iterations', item?.project)).map((i) => ({ key: i.path, label: i.name, sub: i.path === i.name ? undefined : i.path, badge: i.timeFrame === 'current' ? 'current' : undefined }))
+  const areas = async (): Promise<Choice[]> => (await call('areas', item?.project)).map((i) => ({ key: i.path, label: i.path }))
 
   const setParent = (parentId: number | null): Promise<void> =>
     save({ $parent: parentId }, parentId === null ? 'Parent removed' : `Parent set to #${parentId}`)
@@ -170,27 +190,28 @@ export function ItemDrawer({ id, onClose }: { id: number; onClose: () => void })
               <dd className="row">
                 <span className="ellipsis">{item.assignedTo?.name ?? <span className="faint">Unassigned</span>}</span>
                 {!mine && (
-                  <button
-                    className="btn sm"
-                    onClick={() =>
-                      void call('assignToMe', id)
-                        .then((it) => {
-                          setItem({ ...it, description: item.description })
-                          toast('Assigned to you')
-                        })
-                        .catch((e: Error) => toast(e.message, { error: true }))
-                    }
-                  >
+                  <button className="btn sm" onClick={() => void save({ 'System.AssignedTo': me }, 'Assigned to you')}>
                     <UserCheck size={13} /> Take it
                   </button>
                 )}
+                <button className="btn sm" onClick={() => setPicker('assignee')}>
+                  Change
+                </button>
               </dd>
-              {item.iterationPath && (
-                <>
-                  <dt>Iteration</dt>
-                  <dd className="ellipsis">{item.iterationPath}</dd>
-                </>
-              )}
+              <dt>Iteration</dt>
+              <dd className="row">
+                <span className="ellipsis">{item.iterationPath ?? <span className="faint">none</span>}</span>
+                <button className="btn sm" onClick={() => setPicker('iteration')}>
+                  Change
+                </button>
+              </dd>
+              <dt>Area</dt>
+              <dd className="row">
+                <span className="ellipsis">{item.areaPath ?? <span className="faint">none</span>}</span>
+                <button className="btn sm" onClick={() => setPicker('area')}>
+                  Change
+                </button>
+              </dd>
               <dt>Parent</dt>
               <dd className="row">
                 {item.parentId ? (
@@ -209,15 +230,53 @@ export function ItemDrawer({ id, onClose }: { id: number; onClose: () => void })
                   </button>
                 )}
               </dd>
-              {item.tags.length > 0 && (
+              <dt>Tags</dt>
+              <dd className="row wrap">
+                {item.tags.map((t) => (
+                  <span key={t} className="pill">
+                    {t}
+                    <X size={11} style={{ cursor: 'pointer' }} onClick={() => void saveTags(item.tags.filter((x) => x !== t))} />
+                  </span>
+                ))}
+                <input
+                  className="input"
+                  style={{ width: 120, padding: '2px 8px' }}
+                  list="tag-ideas"
+                  placeholder="add tag"
+                  value={tagText}
+                  onFocus={() => tagIdeas.length || void call('tags', item.project).then(setTagIdeas).catch(() => undefined)}
+                  onChange={(e) => setTagText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ',') {
+                      e.preventDefault()
+                      const next = addTags(item.tags, tagText)
+                      setTagText('')
+                      if (next.length !== item.tags.length) void saveTags(next)
+                    }
+                  }}
+                />
+                <datalist id="tag-ideas">
+                  {tagIdeas.map((t) => (
+                    <option key={t} value={t} />
+                  ))}
+                </datalist>
+              </dd>
+              {has('Microsoft.VSTS.Common.Priority') && (
                 <>
-                  <dt>Tags</dt>
-                  <dd className="row wrap">
-                    {item.tags.map((t) => (
-                      <span key={t} className="pill">
-                        {t}
-                      </span>
-                    ))}
+                  <dt>Priority</dt>
+                  <dd>
+                    <select
+                      className="select inline"
+                      value={item.priority ?? ''}
+                      onChange={(e) => void save({ 'Microsoft.VSTS.Common.Priority': e.target.value ? Number(e.target.value) : null }, 'Priority saved')}
+                    >
+                      <option value="">none</option>
+                      {(specs.find((x) => x.referenceName === 'Microsoft.VSTS.Common.Priority')?.allowedValues?.map(Number) ?? [1, 2, 3, 4]).map((n) => (
+                        <option key={n} value={n}>
+                          {n}
+                        </option>
+                      ))}
+                    </select>
                   </dd>
                 </>
               )}
@@ -233,7 +292,7 @@ export function ItemDrawer({ id, onClose }: { id: number; onClose: () => void })
                   </dd>
                 </>
               )}
-              {item.remainingWork != null && (
+              {(item.remainingWork != null || has('Microsoft.VSTS.Scheduling.RemainingWork')) && (
                 <>
                   <dt>Remaining (h)</dt>
                   <dd>
@@ -241,7 +300,7 @@ export function ItemDrawer({ id, onClose }: { id: number; onClose: () => void })
                   </dd>
                 </>
               )}
-              {item.completedWork != null && (
+              {(item.completedWork != null || has('Microsoft.VSTS.Scheduling.CompletedWork')) && (
                 <>
                   <dt>Completed (h)</dt>
                   <dd>
@@ -315,6 +374,40 @@ export function ItemDrawer({ id, onClose }: { id: number; onClose: () => void })
           </>
         )}
       </div>
+      {picker === 'assignee' && item && (
+        <ListPicker
+          title="Assign to"
+          placeholder="Search people by name or email"
+          load={people}
+          top={[
+            { key: me, label: 'Me', sub: me },
+            { key: '', label: 'Unassigned' }
+          ]}
+          current={item.assignedTo?.email ?? ''}
+          onClose={() => setPicker(null)}
+          onPick={(c) => save({ 'System.AssignedTo': c.key || null }, c.key ? `Assigned to ${c.label === 'Me' ? 'you' : c.label}` : 'Unassigned')}
+        />
+      )}
+      {picker === 'iteration' && item && (
+        <ListPicker
+          title="Move to sprint"
+          placeholder="Search sprints"
+          load={sprints}
+          current={item.iterationPath}
+          onClose={() => setPicker(null)}
+          onPick={(c) => save({ 'System.IterationPath': c.key }, `Moved to ${c.label}`)}
+        />
+      )}
+      {picker === 'area' && item && (
+        <ListPicker
+          title="Area"
+          placeholder="Search area paths"
+          load={areas}
+          current={item.areaPath}
+          onClose={() => setPicker(null)}
+          onPick={(c) => save({ 'System.AreaPath': c.key }, 'Area saved')}
+        />
+      )}
       {pickingParent && item && (
         <PickModal
           title="Choose a parent"
@@ -330,7 +423,7 @@ export function ItemDrawer({ id, onClose }: { id: number; onClose: () => void })
   )
 }
 
-function NumberField({ value, onSave }: { value: number; onSave: (v: number) => void }): ReactNode {
+function NumberField({ value, onSave }: { value?: number; onSave: (v: number | null) => void }): ReactNode {
   return (
     <input
       className="input"
@@ -338,10 +431,11 @@ function NumberField({ value, onSave }: { value: number; onSave: (v: number) => 
       type="number"
       min={0}
       step={0.5}
-      defaultValue={value}
+      defaultValue={value ?? ''}
+      key={value ?? 'none'}
       onBlur={(e) => {
-        const v = Number(e.target.value)
-        if (!Number.isNaN(v) && v !== value) onSave(v)
+        const v = numberOrNull(e.target.value)
+        if (v !== undefined && v !== (value ?? null)) onSave(v)
       }}
     />
   )

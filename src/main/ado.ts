@@ -12,6 +12,7 @@ import type {
   WorkItem
 } from '../shared/types'
 import { isTimeEstimate } from '../shared/fields'
+import { flattenTree, mergePeople, sortIterations, type ClassificationNode, type IterationInfo } from '../shared/edit'
 import { levelsFromCategories, parentIdOf, parentLink, parentPatch, type Relation, type TypeLevels } from '../shared/parent'
 
 const API = 'api-version=7.1'
@@ -139,6 +140,7 @@ export class AdoClient {
   private me?: Person
   private types = new Map<string, TypeInfo[]>() // by project
   private levels = new Map<string, TypeLevels>() // by project
+  private lists = new Map<string, { at: number; value: unknown }>() // pickers: people, sprints, areas, tags
   private fieldKinds = new Map<string, Map<string, { kind: FieldKind; readOnly: boolean; name: string }>>() // by project
   private typeFieldCache = new Map<string, FieldSpec[]>() // project|type
   private extraFieldsOk = true
@@ -516,6 +518,66 @@ export class AdoClient {
       body: JSON.stringify(ops)
     })
     return this.getItem(id)
+  }
+
+  private async cached<T>(key: string, load: () => Promise<T>, minutes = 10): Promise<T> {
+    const hit = this.lists.get(key)
+    if (hit && Date.now() - hit.at < minutes * 60e3) return hit.value as T
+    const value = await load()
+    this.lists.set(key, { at: Date.now(), value })
+    return value
+  }
+
+  /**
+   * People to assign to: the team's members (needs a team, works with the Project and Team: Read scope) plus whoever had work
+   * assigned recently, which also finds people outside the team. No org-wide directory: that needs extra PAT scopes.
+   */
+  async getPeople(): Promise<Person[]> {
+    return this.cached('people', async () => {
+      const team: Person[] = this.cfg.team
+        ? await this.req<{ value: { identity: { displayName: string; uniqueName?: string; id?: string } }[] }>(
+            `${this.org}/_apis/projects/${encodeURIComponent(this.cfg.project)}/teams/${encodeURIComponent(this.cfg.team)}/members?$top=500&${API}`
+          )
+            .then((r) => r.value.map((m) => ({ name: m.identity.displayName, email: m.identity.uniqueName, id: m.identity.id })))
+            .catch(() => [])
+        : []
+      const recent = await this.search({ text: '', status: 'any', assigned: 'anyone' })
+        .then((items) => items.flatMap((i) => (i.assignedTo ? [i.assignedTo] : [])))
+        .catch(() => [])
+      return mergePeople(team, recent).sort((a, b) => a.name.localeCompare(b.name))
+    })
+  }
+
+  private async tree(project: string, kind: 'iterations' | 'areas'): Promise<IterationInfo[]> {
+    const root = await this.req<ClassificationNode>(`${this.projectUrl(project)}/_apis/wit/classificationnodes/${kind}?$depth=8&${API}`)
+    return flattenTree(root)
+  }
+
+  /** Sprints to move a card to: the team's own iterations when it's the configured project, else the project's tree. */
+  async getIterations(project = this.cfg.project): Promise<IterationInfo[]> {
+    return this.cached(`iterations:${project}`, async () => {
+      if (this.cfg.team && project === this.cfg.project) {
+        const data = await this.req<{
+          value: { name: string; path: string; attributes?: { startDate?: string; timeFrame?: string } }[]
+        }>(`${this.projectUrl(project)}/${encodeURIComponent(this.cfg.team)}/_apis/work/teamsettings/iterations?${API}`).catch(() => undefined)
+        const list = (data?.value ?? []).map((i) => ({ name: i.name, path: i.path, timeFrame: i.attributes?.timeFrame, start: i.attributes?.startDate }))
+        if (list.length) return sortIterations(list)
+      }
+      return sortIterations(await this.tree(project, 'iterations'))
+    }, 5)
+  }
+
+  async getAreas(project = this.cfg.project): Promise<IterationInfo[]> {
+    return this.cached(`areas:${project}`, () => this.tree(project, 'areas'), 5)
+  }
+
+  /** Tags already used in the project, for suggestions. */
+  async getTags(project = this.cfg.project): Promise<string[]> {
+    return this.cached(`tags:${project}`, async () => {
+      const r = await this.req<{ value?: { name: string }[] } | { value?: { name: string }[] }[]>(`${this.projectUrl(project)}/_apis/wit/tags?${API}`)
+      const list = (Array.isArray(r) ? r.flatMap((x) => x.value ?? []) : (r.value ?? [])).map((t) => t.name)
+      return list.sort((a, b) => a.localeCompare(b))
+    }, 5)
   }
 
   /** Backlog level of every type in the project (task < requirement < feature < epic), for the parent picker. */

@@ -289,6 +289,93 @@ export async function runShots(d: ShotDeps, dir: string): Promise<void> {
     console.error('PARENT CHECK FAILED: F5 refresh did not show a parent set outside Golau')
     failed = true
   }
+  // editing the other fields from the card panel: assignee, sprint, area, tags, priority, work hours
+  const dd = (label: string): string => `[...document.querySelectorAll('.drawer dl.props dt')].find((x) => x.textContent === ${JSON.stringify(label)})?.nextElementSibling`
+  const typeInto = (sel: string, value: string, key?: string): Promise<unknown> =>
+    js(`(() => {
+      const el = document.querySelector(${JSON.stringify(sel)})
+      if (!el) return false
+      el.focus()
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(el, ${JSON.stringify(value)})
+      el.dispatchEvent(new Event('input', { bubbles: true }))
+      ${key ? `el.dispatchEvent(new KeyboardEvent('keydown', { key: ${JSON.stringify(key)}, bubbles: true }))` : ''}
+      return true
+    })()`)
+  const field = (id: number): Promise<Record<string, unknown>> =>
+    js(`window.tl.call('getItem', ${id}).then((i) => ({ who: i.assignedTo?.name, sprint: i.iterationPath, area: i.areaPath, tags: i.tags, prio: i.priority, rem: i.remainingWork, done: i.completedWork }))`) as Promise<Record<string, unknown>>
+  const rows = (): Promise<string[]> => js(`[...document.querySelectorAll('.modal .pick')].map((x) => x.textContent.trim())`) as Promise<string[]>
+  const pickRow = (text: string): Promise<unknown> => js(`[...document.querySelectorAll('.modal .pick')].find((x) => x.textContent.includes(${JSON.stringify(text)}))?.click()`)
+  const openChange = async (label: string): Promise<void> => {
+    await js(`(${dd(label)})?.querySelector('button.btn:last-of-type')?.click()`)
+    await wait(1200)
+  }
+  await route({ view: 'item', id: 4114 })
+  await wait(1200)
+  await openChange('Assigned')
+  const whoRows = await rows()
+  await snap(d.main(), '05h-assignee-picker')
+  await typeInto('.modal input', 'priya')
+  await wait(300)
+  const filtered = await rows()
+  await pickRow('Priya Patel')
+  await wait(1500)
+  const assigned = (await field(4114)).who
+  await openChange('Assigned')
+  await pickRow('Unassigned')
+  await wait(1500)
+  const unassigned = (await field(4114)).who
+  await openChange('Iteration')
+  const sprintRows = await rows()
+  await pickRow('Sprint 43')
+  await wait(1500)
+  const sprint = (await field(4114)).sprint
+  await openChange('Area')
+  await pickRow('Platform\\Core\\Auth')
+  await wait(1500)
+  const area = (await field(4114)).area
+  await typeInto(`.drawer input[list=tag-ideas]`, 'api, brand new', 'Enter')
+  await wait(1500)
+  const tagsAdded = (await field(4114)).tags as string[]
+  await js(`[...(${dd('Tags')}).querySelectorAll('.pill')].find((x) => x.textContent.trim() === 'brand new')?.querySelector('svg')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))`)
+  await wait(1500)
+  const tagsRemoved = (await field(4114)).tags as string[]
+  await js(`(() => { const s = (${dd('Priority')})?.querySelector('select'); if (!s) return; Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(s, '1'); s.dispatchEvent(new Event('change', { bubbles: true })) })()`)
+  await wait(1500)
+  const prio = (await field(4114)).prio
+  await snap(d.main(), '05i-fields-edited')
+  // work hours on a Task: clear and set again
+  await route({ view: 'item', id: 4108 })
+  await wait(1200)
+  await js(`(() => { const i = (${dd('Remaining (h)')})?.querySelector('input'); i.focus(); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(i, ''); i.dispatchEvent(new Event('input', { bubbles: true })); i.dispatchEvent(new FocusEvent('focusout', { bubbles: true })) })()`)
+  await wait(1500)
+  const remCleared = (await field(4108)).rem
+  await js(`(() => { const i = (${dd('Remaining (h)')})?.querySelector('input'); i.focus(); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(i, '5'); i.dispatchEvent(new Event('input', { bubbles: true })); i.dispatchEvent(new FocusEvent('focusout', { bubbles: true })) })()`)
+  await wait(1500)
+  const remSet = (await field(4108)).rem
+  // a sprint that is not in the project is refused with ADO's own message
+  const badSprint = (await js(`window.tl.call('updateItem', 4114, { 'System.IterationPath': 'Platform\\Nope' })`)) as { ok: boolean; message?: string }
+  console.log('fields-check', JSON.stringify({ whoRows, filtered, assigned, unassigned, sprintRows, sprint, area, tagsAdded, tagsRemoved, prio, remCleared, remSet, badSprint }))
+  if (
+    !['Me', 'Unassigned', 'Priya Patel', 'Sam Rivera'].every((n) => whoRows.some((r) => r.includes(n))) ||
+    filtered.length !== 1 ||
+    assigned !== 'Priya Patel' ||
+    unassigned !== undefined ||
+    !sprintRows[0].includes('Sprint 42') ||
+    !sprintRows[0].includes('current') ||
+    sprint !== 'Platform\\Sprint 43' ||
+    area !== 'Platform\\Core\\Auth' ||
+    !(tagsAdded.includes('api') && tagsAdded.includes('brand new')) ||
+    tagsRemoved.includes('brand new') ||
+    !tagsRemoved.includes('api') ||
+    prio !== 1 ||
+    remCleared !== undefined ||
+    remSet !== 5 ||
+    badSprint.ok ||
+    !/TF401347/.test(String(badSprint.message))
+  ) {
+    console.error('FIELDS EDIT CHECK FAILED')
+    failed = true
+  }
   // a card that already breaks a rule (the mock PBI has no Customer): re-parenting asks for it, like any other edit
   await route({ view: 'item', id: 4110 })
   await wait(1200)
