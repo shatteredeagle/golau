@@ -1,14 +1,14 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { Copy, Loader2, Plus, UserCheck, X } from 'lucide-react'
+import { Copy, Loader2, Plus, RefreshCw, UserCheck, X } from 'lucide-react'
 import type { Comment, FieldSpec, WorkItem } from '@shared/types'
 import { ago, fmtDur, itemTotal, todayTotals } from '@shared/time'
-import { call } from '../api'
+import { call, REFRESH_EVENT } from '../api'
 import { FocusButton, Html, OpenInAdo, StaleBadge, TypeChip, useApp } from '../components'
 import { FieldEditor, timeEstimateSpec } from '../fields'
 import { PickModal } from './PickModal'
 
 export function ItemDrawer({ id, onClose }: { id: number; onClose: () => void }): ReactNode {
-  const { types, state, toast, go, openItem, updateItem } = useApp()
+  const { types, state, toast, go, openItem, updateItem, refreshWork } = useApp()
   const [item, setItem] = useState<WorkItem | null>(null)
   const [comments, setComments] = useState<Comment[] | null>(null)
   const [me, setMe] = useState<string>('')
@@ -17,6 +17,8 @@ export function ItemDrawer({ id, onClose }: { id: number; onClose: () => void })
   const [posting, setPosting] = useState(false)
   const [estimateSpec, setEstimateSpec] = useState<FieldSpec>()
   const [pickingParent, setPickingParent] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
+  const [parentTitle, setParentTitle] = useState<{ id: number; title: string }>()
 
   const load = async (): Promise<void> => {
     try {
@@ -30,6 +32,38 @@ export function ItemDrawer({ id, onClose }: { id: number; onClose: () => void })
       setError((e as Error).message)
     }
   }
+
+  /** Re-read the card (and the My work list) from Azure DevOps, e.g. after changing it there. */
+  const refresh = async (): Promise<void> => {
+    setRefreshing(true)
+    try {
+      await Promise.all([load(), refreshWork(true)])
+    } finally {
+      setRefreshing(false)
+    }
+  }
+
+  // F5, and coming back to the window, re-read the card: Azure DevOps is the source of truth
+  useEffect(() => {
+    const h = (): void => {
+      if (!document.querySelector('.overlay')) void load()
+    }
+    window.addEventListener(REFRESH_EVENT, h)
+    return () => window.removeEventListener(REFRESH_EVENT, h)
+  }, [id])
+
+  // a parent set outside Golau isn't in the title cache: look it up
+  const parentId = item?.parentId
+  useEffect(() => {
+    if (!parentId || state.titles[parentId]) return setParentTitle(undefined)
+    let live = true
+    void call('getItem', parentId)
+      .then((p) => live && setParentTitle({ id: p.id, title: p.title }))
+      .catch(() => undefined)
+    return () => {
+      live = false
+    }
+  }, [parentId])
 
   useEffect(() => {
     void load()
@@ -83,6 +117,9 @@ export function ItemDrawer({ id, onClose }: { id: number; onClose: () => void })
             onClick={() => item && void call('copyText', item.webUrl).then(() => toast('Link copied'))}
           >
             <Copy size={14} />
+          </button>
+          <button className="icon-btn" title="Refresh from Azure DevOps" disabled={refreshing} onClick={() => void refresh()}>
+            <RefreshCw size={14} className={refreshing ? 'spin' : ''} />
           </button>
           <span className="spacer" />
           {item && <OpenInAdo id={item.id} label />}
@@ -158,7 +195,7 @@ export function ItemDrawer({ id, onClose }: { id: number; onClose: () => void })
               <dd className="row">
                 {item.parentId ? (
                   <a href="#" className="ellipsis" onClick={(e) => { e.preventDefault(); openItem(item.parentId!) }}>
-                    #{item.parentId} {state.titles[item.parentId]?.title ?? ''}
+                    #{item.parentId} {state.titles[item.parentId]?.title ?? (parentTitle?.id === item.parentId ? parentTitle.title : '')}
                   </a>
                 ) : (
                   <span className="faint">none</span>

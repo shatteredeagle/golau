@@ -262,6 +262,33 @@ export async function runShots(d: ShotDeps, dir: string): Promise<void> {
     console.error('PARENT CHECK FAILED')
     failed = true
   }
+  // changed in Azure DevOps itself: the refresh button picks it up, title included
+  d.main()?.setContentSize(620, 600)
+  await wait(500)
+  await route({ view: 'work' })
+  await wait(800)
+  await snap(d.main(), '03f-board-narrow')
+  await route({ view: 'item', id: 4110 })
+  await wait(1000)
+  await snap(d.main(), '05g-drawer-narrow')
+  d.main()?.setContentSize(1280, 800)
+  await wait(500)
+  await route({ view: 'item', id: 4114 })
+  await wait(1000)
+  const outsideEdit = await fetch('http://localhost:7071/mockorg/_apis/wit/workitems/4114?api-version=7.1', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json-patch+json', Authorization: `Basic ${Buffer.from(':mock-pat').toString('base64')}` },
+    body: JSON.stringify([{ op: 'add', path: '/relations/-', value: { rel: 'System.LinkTypes.Hierarchy-Reverse', url: 'http://localhost:7071/mockorg/_apis/wit/workItems/4131' } }])
+  })
+  const hadBtn = await js(`!!document.querySelector('.drawer button[title="Refresh from Azure DevOps"]')`)
+  await js(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 'F5', bubbles: true }))`)
+  await wait(1500)
+  const outside = (await js(`(${parentDd})?.textContent ?? ''`)) as string
+  console.log('refresh-check', JSON.stringify({ outside, hadBtn, status: outsideEdit.status, body: (await outsideEdit.text()).slice(0, 200) }))
+  if (!/4131 Audit and compliance/.test(outside)) {
+    console.error('PARENT CHECK FAILED: F5 refresh did not show a parent set outside Golau')
+    failed = true
+  }
   // a card that already breaks a rule (the mock PBI has no Customer): re-parenting asks for it, like any other edit
   await route({ view: 'item', id: 4110 })
   await wait(1200)

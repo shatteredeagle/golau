@@ -313,6 +313,18 @@ label.check input {
   width: 4px;
   height: 14px;
   border-radius: 2px;
+  flex: none;
+}
+.type-chip {
+  min-width: 0;
+}
+/* narrow windows: the type name shrinks (with …); ids, icons and buttons keep their size instead of overlapping */
+.tile > .row:first-child > :not(.type-chip):not(.spacer),
+.drawer-head .row > :not(.type-chip):not(.spacer) {
+  flex: none;
+}
+.drawer-head .row {
+  min-width: 0;
 }
 
 .card {

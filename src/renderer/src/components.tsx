@@ -35,7 +35,7 @@ export function TypeChip({ type, showName = true }: { type: string; showName?: b
   return (
     <span className="type-chip" title={type}>
       <i style={{ background: typeColor(types, type) }} />
-      {showName && type}
+      {showName && <span className="ellipsis">{type}</span>}
     </span>
   )
 }

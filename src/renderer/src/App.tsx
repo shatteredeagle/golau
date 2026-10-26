@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { CalendarCheck, Inbox as InboxIcon, LayoutGrid, Plus, Search as SearchIcon, Settings as Cog, Sun } from 'lucide-react'
 import type { Route, TypeInfo } from '@shared/types'
-import { call, on, useAppState, useRoute, useSettings, useWork } from './api'
+import { call, on, REFRESH_EVENT, requestRefresh, useAppState, useRoute, useSettings, useWork } from './api'
 import { AppCtx, type Ctx } from './components'
 import { FocusBar } from './views/FocusBar'
 import { Today } from './views/Today'
@@ -106,6 +106,29 @@ export function App(): ReactNode {
   }, [])
   useRoute(go)
 
+  const refreshRef = useRef(refresh)
+  refreshRef.current = refresh
+  const toastRef = useRef(toast)
+  toastRef.current = toast
+  // refresh (F5, Ctrl+R, the refresh buttons, window focus): re-read My work; open cards listen too
+  useEffect(() => {
+    const h = (e: Event): void => {
+      const quiet = (e as CustomEvent<{ quiet?: boolean }>).detail?.quiet
+      void refreshRef.current(true).then(() => quiet || toastRef.current('Refreshed from Azure DevOps'))
+    }
+    let last = Date.now()
+    const focus = (): void => {
+      if (Date.now() - last > 15_000) requestRefresh(true)
+      last = Date.now()
+    }
+    window.addEventListener(REFRESH_EVENT, h)
+    window.addEventListener('focus', focus)
+    return () => {
+      window.removeEventListener(REFRESH_EVENT, h)
+      window.removeEventListener('focus', focus)
+    }
+  }, [])
+
   // keyboard: Ctrl+K switch task, Ctrl+N new item, Ctrl+F / "/" search
   useEffect(() => {
     const h = (e: KeyboardEvent): void => {
@@ -116,6 +139,9 @@ export function App(): ReactNode {
       } else if (e.ctrlKey && e.key.toLowerCase() === 'n') {
         e.preventDefault()
         setOverlay({ kind: 'create', route: { view: 'create' } })
+      } else if (e.key === 'F5' || (e.ctrlKey && e.key.toLowerCase() === 'r')) {
+        e.preventDefault()
+        requestRefresh()
       } else if ((e.ctrlKey && e.key.toLowerCase() === 'f') || (!typing && e.key === '/')) {
         e.preventDefault()
         setPage('search')

@@ -73,7 +73,7 @@ Settings → *Start with Windows* makes it launch to the tray at login.
 
 Nudges only fire in your work hours, never while you're idle, one at a time, and every one has a no-guilt "later". Tray → *Quiet for…* silences them for a focus block.
 
-> **Keys:** `Ctrl+K` switch task · `Ctrl+N` new item · `/` search · `Ctrl+Alt+Space` brain dump · `Esc` close
+> **Keys:** `F5` refresh from Azure DevOps · `Ctrl+K` switch task · `Ctrl+N` new item · `/` search · `Ctrl+Alt+Space` brain dump · `Esc` close
 
 ## Security
 

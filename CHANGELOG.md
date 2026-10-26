@@ -2,6 +2,15 @@
 
 What changed in each Golau release, for the people using it. The release workflow publishes the section for each version as its release notes, so every version needs one here before it's tagged.
 
+## 0.3.6
+
+### New
+- **Refresh, so Golau matches Azure DevOps.** Press **F5** (or Ctrl+R) anywhere to re-read your work and the open card from Azure DevOps, and the card panel has a refresh button of its own. Golau also refreshes when you switch back to its window, so a parent, state or title changed in Azure DevOps shows up without doing anything. Azure DevOps is always the source of truth.
+
+### Fixed
+- **A parent set in Azure DevOps now shows its title** in the card panel instead of just the number.
+- **Narrow windows no longer overlap headers.** On cards and in the card panel a long type name such as "Product Backlog Item" is shortened with … instead of running over the card number and the Open in ADO button.
+
 ## 0.3.5
 
 ### New

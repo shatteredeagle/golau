@@ -45,6 +45,10 @@ export function useSettings(): Settings | null {
   return s
 }
 
+/** Fired on F5 / Ctrl+R and when the window regains focus: every view re-reads from Azure DevOps (detail.quiet: no toast). */
+export const REFRESH_EVENT = 'golau-refresh'
+export const requestRefresh = (quiet = false): void => void window.dispatchEvent(new CustomEvent(REFRESH_EVENT, { detail: { quiet } }))
+
 /** My assigned work, kept fresh by the main process. */
 export function useWork(): { items: WorkItem[] | null; error: string; refresh: (force?: boolean) => Promise<void> } {
   const [items, setItems] = useState<WorkItem[] | null>(null)
