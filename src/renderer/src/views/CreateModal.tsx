@@ -182,11 +182,13 @@ export function CreateModal({ route, onClose }: { route: Extract<Route, { view: 
         <div className="row wrap" style={{ gap: 14, alignItems: 'end' }}>
           <label className="field" style={{ flex: 1, minWidth: 200 }}>
             Parent
-            <div className="row">
+            <div className="row wrap">
               {parentId ? (
-                <span className="pill accent ellipsis" style={{ maxWidth: 260 }}>
-                  #{parentId} {parentTitle || state.titles[parentId]?.title || ''}
-                  <X size={12} style={{ cursor: 'pointer' }} onClick={() => setParentId(undefined)} />
+                <span className="pill accent" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, maxWidth: '100%', minWidth: 0 }}>
+                  <span className="ellipsis">
+                    #{parentId} {parentTitle || state.titles[parentId]?.title || ''}
+                  </span>
+                  <X size={12} style={{ cursor: 'pointer', flex: 'none' }} onClick={() => setParentId(undefined)} />
                 </span>
               ) : (
                 <span className="faint small">none</span>

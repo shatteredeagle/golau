@@ -352,6 +352,32 @@ export async function runShots(d: ShotDeps, dir: string): Promise<void> {
     failed = true
   }
   await snap(d.main(), '09-create')
+  // a parent with a long title must not push into the Tags field, at any window width
+  const overlapping = `(() => {
+    const r = [...document.querySelectorAll('.modal label.field')].map((l) => l.getBoundingClientRect())
+    const boxes = r.some((a, i) => r.some((b, j) => j > i && a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1))
+    // content spilling out of its own field, or the form scrolling sideways
+    const spill = [...document.querySelectorAll('.modal label.field')].some((l) => [...l.querySelectorAll('*')].some((c) => c.getBoundingClientRect().right > l.getBoundingClientRect().right + 1))
+    const m = document.querySelector('.modal')
+    return boxes || spill || (!!m && m.scrollWidth > m.clientWidth + 1)
+  })()`
+  for (const [w, h, name] of [[1280, 800, '09c-create-parent'], [620, 700, '09d-create-parent-narrow']] as const) {
+    await esc()
+    await wait(300)
+    d.main()?.setContentSize(w, h)
+    await route({ view: 'create', prefill: { title: 'Child card', parentId: 4111 } })
+    await wait(1200)
+    const lap = await js(overlapping)
+    console.log('create-parent-layout', w, JSON.stringify(lap))
+    if (lap) {
+      console.error(`LAYOUT CHECK FAILED: create form fields overlap at ${w}px`)
+      failed = true
+    }
+    await snap(d.main(), name)
+    await esc()
+  }
+  d.main()?.setContentSize(1280, 800)
+  await wait(400)
   await esc()
 
   // a type whose process requires Description + Customer: the form shows them and blocks an empty submit

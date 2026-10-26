@@ -2,6 +2,11 @@
 
 What changed in each Golau release, for the people using it. The release workflow publishes the section for each version as its release notes, so every version needs one here before it's tagged.
 
+## 0.3.8
+
+### Fixed
+- **New item: a long parent no longer covers the other fields.** Choosing a parent with a long title pushed the Change button under Tags. The title is now shortened with … and Change stays visible. The same fix stops the whole form from scrolling sideways in a narrow window.
+
 ## 0.3.7
 
 ### Fixed
