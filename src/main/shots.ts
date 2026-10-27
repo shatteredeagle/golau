@@ -193,7 +193,7 @@ export async function runShots(d: ShotDeps, dir: string): Promise<void> {
     js(`[...document.querySelectorAll(${JSON.stringify(sel)})].find((x) => x.textContent.trim() === ${JSON.stringify(text)})?.click()`)
   const parentOf = (id: number): Promise<number | undefined> => js(`window.tl.call('getItem', ${id}).then((i) => i.parentId)`) as Promise<number | undefined>
   const openParentPicker = async (): Promise<void> => {
-    await js(`(${parentDd})?.querySelector('button')?.click()`)
+    await js(`(${parentDd})?.querySelector('button.value')?.click()`)
     await wait(1500)
   }
   await route({ view: 'item', id: 4114 })
@@ -241,7 +241,7 @@ export async function runShots(d: ShotDeps, dir: string): Promise<void> {
   const has = (a: number[], ...ids: number[]): boolean => ids.every((i) => a.includes(i))
   const lacks = (a: number[], ...ids: number[]): boolean => ids.every((i) => !a.includes(i))
   if (
-    !/none/.test(String(noParent)) ||
+    !/Add a parent/.test(String(noParent)) ||
     onChips.join() !== 'Feature' ||
     allChips.join() !== 'Bug,Product Backlog Item,User Story,Feature,Epic' ||
     !has(first, 4101, 4130, 4131) ||
@@ -306,11 +306,17 @@ export async function runShots(d: ShotDeps, dir: string): Promise<void> {
   const rows = (): Promise<string[]> => js(`[...document.querySelectorAll('.modal .pick')].map((x) => x.textContent.trim())`) as Promise<string[]>
   const pickRow = (text: string): Promise<unknown> => js(`[...document.querySelectorAll('.modal .pick')].find((x) => x.textContent.includes(${JSON.stringify(text)}))?.click()`)
   const openChange = async (label: string): Promise<void> => {
-    await js(`(${dd(label)})?.querySelector('button.btn:last-of-type')?.click()`)
+    await js(`(${dd(label)})?.querySelector('button.value')?.click()`)
     await wait(1200)
   }
   await route({ view: 'item', id: 4114 })
   await wait(1200)
+  const valueUi = (await js(`({ values: document.querySelectorAll('.drawer dl.props button.value').length, changeBtns: [...document.querySelectorAll('.drawer dl.props button')].filter((b) => /^(Change|Add parent)$/.test(b.textContent.trim())).length })`)) as { values: number; changeBtns: number }
+  console.log('values-check', JSON.stringify(valueUi))
+  if (valueUi.values < 4 || valueUi.changeBtns) {
+    console.error('VALUES CHECK FAILED: fields should be clickable values, not Change buttons')
+    failed = true
+  }
   await openChange('Assigned')
   const whoRows = await rows()
   await snap(d.main(), '05h-assignee-picker')

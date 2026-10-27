@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { Copy, Loader2, Plus, RefreshCw, UserCheck, X } from 'lucide-react'
+import { Copy, ExternalLink, Loader2, Pencil, Plus, RefreshCw, UserCheck, X } from 'lucide-react'
 import type { Comment, FieldSpec, WorkItem } from '@shared/types'
 import { ago, fmtDur, itemTotal, todayTotals } from '@shared/time'
 import { call, REFRESH_EVENT } from '../api'
@@ -199,46 +199,51 @@ export function ItemDrawer({ id, onClose }: { id: number; onClose: () => void })
             <dl className="props">
               <dt>Assigned</dt>
               <dd className="row">
-                <span className="ellipsis">{item.assignedTo?.name ?? <span className="faint">Unassigned</span>}</span>
+                <button className="value" title="Change assignee" onClick={() => setPicker('assignee')}>
+                  <span className="ellipsis">{item.assignedTo?.name ?? <span className="faint">Unassigned</span>}</span>
+                  <Pencil size={11} />
+                </button>
                 {!mine && (
                   <button className="btn sm" onClick={() => void save({ 'System.AssignedTo': me }, 'Assigned to you')}>
                     <UserCheck size={13} /> Take it
                   </button>
                 )}
-                <button className="btn sm" onClick={() => setPicker('assignee')}>
-                  Change
-                </button>
               </dd>
               <dt>Iteration</dt>
               <dd className="row">
-                <span className="ellipsis">{item.iterationPath ?? <span className="faint">none</span>}</span>
-                <button className="btn sm" onClick={() => setPicker('iteration')}>
-                  Change
+                <button className="value" title="Change iteration" onClick={() => setPicker('iteration')}>
+                  <span className="ellipsis">{item.iterationPath ?? <span className="faint">none</span>}</span>
+                  <Pencil size={11} />
                 </button>
               </dd>
               <dt>Area</dt>
               <dd className="row">
-                <span className="ellipsis">{item.areaPath ?? <span className="faint">none</span>}</span>
-                <button className="btn sm" onClick={() => setPicker('area')}>
-                  Change
+                <button className="value" title="Change area" onClick={() => setPicker('area')}>
+                  <span className="ellipsis">{item.areaPath ?? <span className="faint">none</span>}</span>
+                  <Pencil size={11} />
                 </button>
               </dd>
               <dt>Parent</dt>
               <dd className="row">
-                {item.parentId ? (
-                  <a href="#" className="ellipsis" onClick={(e) => { e.preventDefault(); openItem(item.parentId!) }}>
-                    #{item.parentId} {state.titles[item.parentId]?.title ?? (parentTitle?.id === item.parentId ? parentTitle.title : '')}
-                  </a>
-                ) : (
-                  <span className="faint">none</span>
-                )}
-                <button className="btn sm" onClick={() => setPickingParent(true)}>
-                  {item.parentId ? 'Change' : 'Add parent'}
+                <button className="value" title={item.parentId ? 'Change parent' : 'Add a parent'} onClick={() => setPickingParent(true)}>
+                  {item.parentId ? (
+                    <span className="ellipsis">
+                      #{item.parentId} {state.titles[item.parentId]?.title ?? (parentTitle?.id === item.parentId ? parentTitle.title : '')}
+                    </span>
+                  ) : (
+                    <span className="faint">Add a parent</span>
+                  )}
+                  <Pencil size={11} />
                 </button>
                 {item.parentId && (
-                  <button className="btn sm" title="Remove the parent link" onClick={() => void setParent(null)}>
-                    <X size={12} />
-                  </button>
+                  <>
+                    <button className="icon-btn" title="Open the parent" onClick={() => openItem(item.parentId!)}>
+                      <ExternalLink size={13} />
+                    </button>
+                    <button className="icon-btn" title="Remove the parent link" onClick={() => void setParent(null)}>
+                      <X size={13} />
+                    </button>
+                  </>
                 )}
               </dd>
               <dt>Tags</dt>

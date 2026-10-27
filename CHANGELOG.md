@@ -2,6 +2,13 @@
 
 What changed in each Golau release, for the people using it. The release workflow publishes the section for each version as its release notes, so every version needs one here before it's tagged.
 
+## 0.4.2
+
+### New
+- **Click a value to edit it.** Assigned, Iteration, Area and Parent are now highlighted, with a small pencil. Click the value itself to change it. The separate *Change* buttons are gone.
+- **Parent has two small buttons beside it:** open the parent, and remove the link. An empty parent reads "Add a parent" and works the same way.
+- *Take it* stays next to Assigned when the card isn't yours.
+
 ## 0.4.1
 
 ### New

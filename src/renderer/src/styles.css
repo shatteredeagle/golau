@@ -765,6 +765,35 @@ label.check input {
   margin: 0;
   min-width: 0;
 }
+.props .value {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 2px 8px;
+  margin: -2px -8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--accent, #6aa7ff) 10%, transparent);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.props .value svg {
+  flex: none;
+  opacity: 0.35;
+}
+.props .value:hover,
+.props .value:focus-visible {
+  border-color: var(--accent, #6aa7ff);
+  background: color-mix(in srgb, var(--accent, #6aa7ff) 20%, transparent);
+}
+.props .value:hover svg,
+.props .value:focus-visible svg {
+  opacity: 1;
+}
 .html {
   font-size: 13.5px;
   line-height: 1.55;
